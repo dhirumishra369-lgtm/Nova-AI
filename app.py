@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import google.generativeai as genai
 import io
 import datetime
 import openpyxl
@@ -38,9 +39,9 @@ if not check_password():
     st.stop()
 
 st.title("🏭 Bakery, Cafe, Sweets & Savoury ERP System")
-st.caption("Secure Inventory Closing & Recipe Yield Calculator")
+st.caption("Secure Inventory Closing (20 Rows Ready), Recipe Yield Calculator & AI Consultant")
 
-# ----------------- BUILT-IN & CUSTOM MASTER / RECIPES -----------------
+# ----------------- BUILT-IN MASTER & 20 ROWS INITIALIZATION -----------------
 BUILT_IN_MASTER = {
     "FGBK0003": {"name": "BURGER BUN SMALL", "dept": "BAKERY", "uom": "PAC", "price": 7.87, "opening": 286.0},
     "FGBK0030": {"name": "WHEAT PIZZA BASE", "dept": "BAKERY", "uom": "PAC", "price": 18.50, "opening": 150.0},
@@ -50,15 +51,20 @@ BUILT_IN_MASTER = {
 }
 
 CODE_OPTIONS = list(BUILT_IN_MASTER.keys())
+default_code = CODE_OPTIONS[0] if CODE_OPTIONS else "ITEM1"
 
+# Automatically initializing exactly 20 rows for the audit table
 if "demo_audit_items" not in st.session_state:
-    st.session_state.demo_audit_items = pd.DataFrame([
-        {"Item_Code": "FGBK0003", "Store_RM_Issued": 20.0, "Sales_Consumed": 250.0, "Wastage": 2.0, "Physical_Closing": 54.0},
-        {"Item_Code": "FGBK0030", "Store_RM_Issued": 15.0, "Sales_Consumed": 100.0, "Wastage": 1.0, "Physical_Closing": 64.0},
-        {"Item_Code": "FGCK0007", "Store_RM_Issued": 10.0, "Sales_Consumed": 40.0, "Wastage": 1.0, "Physical_Closing": 19.0},
-        {"Item_Code": "FGSW0037", "Store_RM_Issued": 200.0, "Sales_Consumed": 1500.0, "Wastage": 10.0, "Physical_Closing": 550.0},
-        {"Item_Code": "RM0279", "Store_RM_Issued": 50.0, "Sales_Consumed": 60.0, "Wastage": 2.0, "Physical_Closing": 58.0},
-    ])
+    initial_rows = []
+    for _ in range(20):
+        initial_rows.append({
+            "Item_Code": default_code,
+            "Store_RM_Issued": 0.0,
+            "Sales_Consumed": 0.0,
+            "Wastage": 0.0,
+            "Physical_Closing": 0.0
+        })
+    st.session_state.demo_audit_items = pd.DataFrame(initial_rows)
 
 if "custom_recipes" not in st.session_state:
     st.session_state.custom_recipes = {
@@ -80,7 +86,7 @@ def generate_closing_audit_excel(df_audit):
     double_bottom = Border(top=Side(style='thin', color=navy), bottom=Side(style='double', color=navy))
     
     ws.merge_cells("A1:M1")
-    ws["A1"] = "MASTER INVENTORY CLOSING & RECONCILIATION REPORT"
+    ws["A1"] = "MASTER INVENTORY CLOSING & RECONCILIATION REPORT (20 ROWS)"
     ws["A1"].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
     ws["A1"].fill = PatternFill(start_color=navy, end_color=navy, fill_type="solid")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -168,14 +174,15 @@ def generate_closing_audit_excel(df_audit):
     return out.getvalue()
 
 # ----------------- UI TABS -----------------
-tab_closing, tab_recipe = st.tabs([
+tab_closing, tab_recipe, tab_ai = st.tabs([
     "📦 Daily Closing & Stock Reconciliation (Sheet 1)",
-    "🍰 Recipe BOM & Production Yield Calculator (Sheet 2)"
+    "🍰 Recipe BOM & Production Yield Calculator (Sheet 2)",
+    "🤖 AI Assistant & Search"
 ])
 
 with tab_closing:
-    st.subheader("1. Daily Closing & Stock Reconciliation Table")
-    st.caption("Aap neeche '+' button se aur rows jod sakte hain ya values update kar sakte hain:")
+    st.subheader("1. Daily Closing & Stock Reconciliation Table (20 Rows)")
+    st.caption("Aapke paas ab direct 20 rows available hain, aap values update kar sakte hain ya aur bhi jod sakte hain:")
 
     edited_audit = st.data_editor(
         st.session_state.demo_audit_items,
@@ -211,16 +218,15 @@ with tab_closing:
     st.download_button(
         label="📥 Download Closing Audit Report (.xlsx)",
         data=excel_bytes,
-        file_name=f"Daily_Closing_Audit_{datetime.date.today()}.xlsx",
+        file_name=f"Daily_Closing_Audit_20Rows_{datetime.date.today()}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
 
 with tab_recipe:
     st.subheader("2. Recipe BOM & Production Yield Calculator")
-    st.caption("Meva Besan Laddu ya apni koi bhi nayi recipe chun kar target production ke anusar raw material requirement nikalein:")
+    st.caption("Meva Besan Laddu ya apni koi bhi nayi recipe chun kar target production ke anusار raw material requirement nikalein:")
 
-    # Select or add recipe
     recipe_names = list(st.session_state.custom_recipes.keys())
     selected_recipe = st.selectbox("Select Recipe", recipe_names)
 
@@ -275,3 +281,23 @@ with tab_recipe:
 
     recipe_df = pd.DataFrame(breakdown_data)
     st.dataframe(recipe_df, use_container_width=True)
+
+with tab_ai:
+    st.subheader("🤖 AI Assistant & Business Search")
+    st.caption("Aap apne inventory, recipes, ya business optimization se जुड़ा कोई भी सवाल पूछ सकते हैं:")
+    
+    ai_api_key = st.text_input("Enter Gemini API Key", type="password")
+    user_query = st.text_area("Ask AI anything about bakery operations, costing, or inventory:")
+    
+    if st.button("Ask AI Consultant", type="primary"):
+        if not ai_api_key or not user_query:
+            st.warning("Please enter your Gemini API Key and query.")
+        else:
+            try:
+                genai.configure(api_key=ai_api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(f"You are an expert commercial food manufacturing and ERP consultant for bakeries and sweet shops.\nQuery: {user_query}")
+                st.success("AI Expert Advice:")
+                st.write(response.text)
+            except Exception as e:
+                st.error(f"Error communicating with AI: {e}")
