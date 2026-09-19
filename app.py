@@ -16,9 +16,9 @@ st.set_page_config(
 if "ingredients" not in st.session_state:
     st.session_state.ingredients = pd.DataFrame([
         {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
-        {"Ingredient": "Sugar (चीनी)", "Quantity_KG": 8.0, "Rate_Per_KG": 42.0},
+        {"Ingredient": "Sugar", "Quantity_KG": 8.0, "Rate_Per_KG": 42.0},
         {"Ingredient": "Silver Vark", "Quantity_KG": 0.05, "Rate_Per_KG": 4000.0},
-        {"Ingredient": "Cardamom/Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0}
+        {"Ingredient": "Cardamom / Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0}
     ])
 
 # ----------------- EXCEL EXPORT FUNCTION -----------------
@@ -48,7 +48,7 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     ws["E2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
     ws.row_dimensions[2].height = 22
 
-    # Section 1 Header
+    # Section 1 Header: Raw Material
     ws.merge_cells("A4:E4")
     sec1 = ws["A4"]
     sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
@@ -112,7 +112,7 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
         ws.cell(row=tot_r, column=c_idx).border = sum_border
         ws.cell(row=tot_r, column=c_idx).fill = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
 
-    # Section 2 Header
+    # Section 2 Header: Summary
     sum_start = tot_r + 2
     ws.merge_cells(f"A{sum_start}:E{sum_start}")
     sec2 = ws[f"A{sum_start}"]
@@ -171,19 +171,19 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     return out.getvalue()
 
 # ----------------- UI TABS -----------------
-tab1, tab2 = st.tabs(["📊 रेसिपी कॉस्टिंग & यील्ड कैलकुलेटर", "🤖 AI शेफ़ / बिज़नेस कंसल्टेंट"])
+tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Consultant"])
 
 with tab1:
-    st.caption("कमर्शियल किचन, बेकरी और मिठाई उत्पादन के लिए सटीक लागत और मार्जिन विश्लेषक")
+    st.caption("Precise cost, batch yield, and margin analysis for commercial kitchens, confectioneries, and bakeries.")
     
     col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
     with col_left:
-        st.subheader("1. बैच और उत्पाद विवरण")
-        recipe_name = st.text_input("उत्पाद / रेसिपी का नाम", value="Premium Kaju Katli")
+        st.subheader("1. Batch & Product Details")
+        recipe_name = st.text_input("Product / Recipe Name", value="Premium Kaju Katli")
 
-        st.markdown("**सामग्री विवरण (Ingredients & Rates):**")
-        st.caption("टेबल में सीधे क्लिक करके इंग्रीडिएंट, मात्रा (kg) और रेट प्रति kg बदल सकते हैं:")
+        st.markdown("**Ingredients & Raw Material Rates:**")
+        st.caption("Click directly inside any cell to edit ingredient names, weight (KG), and rate per KG:")
         
         edited_df = st.data_editor(
             st.session_state.ingredients,
@@ -191,21 +191,21 @@ with tab1:
             use_container_width=True,
             column_config={
                 "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
-                "Quantity_KG": st.column_config.NumberColumn("Quantity_KG", min_value=0.001, format="%.3f"),
-                "Rate_Per_KG": st.column_config.NumberColumn("Rate_Per_KG", min_value=0.0, format="₹%.2f"),
+                "Quantity_KG": st.column_config.NumberColumn("Quantity (KG)", min_value=0.001, format="%.3f"),
+                "Rate_Per_KG": st.column_config.NumberColumn("Rate / KG (₹)", min_value=0.0, format="₹%.2f"),
             }
         )
 
-        st.subheader("2. यील्ड और अतिरिक्त खर्चे")
+        st.subheader("2. Yield Loss & Overheads")
         c1, c2, c3 = st.columns(3)
         with c1:
-            loss_percent = st.number_input("कुकिंग / मॉइस्चर लॉस (%)", min_value=0.0, max_value=90.0, value=12.0, step=0.5)
+            loss_percent = st.number_input("Cooking / Moisture Loss (%)", min_value=0.0, max_value=90.0, value=12.0, step=0.5)
         with c2:
-            labor_gas_cost = st.number_input("लेबर + गैस खर्च (₹)", min_value=0.0, value=400.0, step=50.0)
+            labor_gas_cost = st.number_input("Labor + Fuel Cost (₹)", min_value=0.0, value=400.0, step=50.0)
         with c3:
-            packaging_cost = st.number_input("पैकेजिंग खर्च (₹)", min_value=0.0, value=250.0, step=50.0)
+            packaging_cost = st.number_input("Packaging Cost (₹)", min_value=0.0, value=250.0, step=50.0)
 
-        target_margin = st.slider("टारगेट ग्रॉस मार्जिन (Target Margin %)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
+        target_margin = st.slider("Target Gross Margin (%)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
 
     # ----------------- CALCULATIONS -----------------
     clean_df = edited_df.dropna(subset=['Quantity_KG', 'Rate_Per_KG']).copy()
@@ -221,32 +221,32 @@ with tab1:
     profit_per_kg = selling_price_per_kg - cost_per_kg
 
     with col_right:
-        st.subheader("📋 आउटपुट और कॉस्ट समरी")
+        st.subheader("📋 Output & Cost Summary")
         st.markdown(f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <p style="margin:0; font-size:14px; color:#64748B;">कुल बैच लागत (Total Batch Cost)</p>
+            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
             <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
-            <p style="margin:0; font-size:14px; color:#64748B;">फ़ाइनल आउटपुट वज़न (Final Yield)</p>
+            <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
             <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
             <span style="color:#DC2626; font-size:13px; font-weight:600;">↓ {loss_percent}% Process Loss</span>
             <hr style="margin: 15px 0; border: 0; border-top: 1px solid #E2E8F0;">
             <div style="display: flex; justify-content: space-between;">
                 <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">लागत प्रति KG (Cost/KG)</p>
+                    <p style="margin:0; font-size:13px; color:#64748B;">Cost Per KG</p>
                     <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
                 </div>
                 <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">सुझाया गया विक्रय मूल्य</p>
+                    <p style="margin:0; font-size:13px; color:#64748B;">Suggested Selling Price</p>
                     <h3 style="margin:0; color:#16A34A;">₹{selling_price_per_kg:,.2f}</h3>
                 </div>
             </div>
             <p style="margin:12px 0 0 0; font-size:13px; color:#2563EB; font-weight:600;">
-                💡 शुद्ध मुनाफ़ा: ₹{profit_per_kg:,.2f} प्रति KG ({target_margin}% मार्जिन पर)
+                💡 Net Profit: ₹{profit_per_kg:,.2f} per KG ({target_margin}% Margin)
             </p>
         </div>
         """, unsafe_allow_html=True)
 
-        # Download Professional Excel File
+        # Generate Professional Excel File
         excel_file_bytes = generate_professional_excel(
             recipe_name, clean_df, loss_percent, final_yield_kg,
             raw_material_cost, labor_gas_cost, packaging_cost,
@@ -255,7 +255,7 @@ with tab1:
         )
 
         st.download_button(
-            label="📥 डाउनलोड प्रोफेशनल एक्सेल रिपोर्ट (.xlsx)",
+            label="📥 Download Professional Excel Report (.xlsx)",
             data=excel_file_bytes,
             file_name=f"{recipe_name.replace(' ', '_')}_Costing_Sheet.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -263,35 +263,35 @@ with tab1:
         )
 
 with tab2:
-    st.subheader("🤖 AI शेफ़ और प्रोडक्शन सलाहकार")
-    st.caption("रेसिपी सुधार, शेल्फ-लाइफ बढ़ाने, यील्ड ऑप्टिमाइज़ेशन या पैकेजिंग पर सलाह लें")
+    st.subheader("🤖 AI Chef & Production Consultant")
+    st.caption("Ask questions about recipe optimization, shelf-life improvement, process loss reduction, or packaging tips.")
     
-    api_key = st.text_input("Gemini API Key दर्ज करें", type="password")
-    user_query = st.text_area("अपना सवाल लिखें", placeholder="उदा. काजू कतली की शेल्फ-लाइफ बिना प्रिज़र्वेटिव के कैसे बढ़ाएँ? या कुकिंग लॉस 12% से कम कैसे करें?")
+    api_key = st.text_input("Enter Gemini API Key", type="password")
+    user_query = st.text_area("Your Question", placeholder="e.g., How can I reduce moisture loss below 12% in cashew fudge? Or how do I extend shelf-life without chemical preservatives?")
     
-    if st.button("AI से सलाह लें", type="primary"):
+    if st.button("Ask AI Consultant", type="primary"):
         if not api_key:
-            st.warning("कृपया पहले अपनी Gemini API Key दर्ज करें।")
+            st.warning("Please enter your Gemini API Key first.")
         elif not user_query:
-            st.warning("कृपया अपना प्रश्न लिखें।")
+            st.warning("Please type a question.")
         else:
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
                 prompt = f"""
-                आप एक अनुभवी कमर्शियल फ़ूड और बेकरी प्रोडक्शन कंसल्टेंट हैं।
-                वर्तमान उत्पाद: {recipe_name}
-                कच्चे माल का कुल वज़न: {raw_material_weight:.2f} kg
-                प्रोसेस लॉस: {loss_percent}%
-                फ़ाइनल यील्ड: {final_yield_kg:.2f} kg
-                लागत प्रति किलो: ₹{cost_per_kg:.2f}
+                You are an expert commercial food technologist, chef, and bakery production consultant.
+                Current Product: {recipe_name}
+                Raw Material Batch Weight: {raw_material_weight:.2f} kg
+                Process Loss: {loss_percent}%
+                Final Output Yield: {final_yield_kg:.2f} kg
+                Cost Per KG: ₹{cost_per_kg:.2f}
 
-                उपयोगकर्ता का प्रश्न: {user_query}
-                कृपया व्यावहारिक, सटीक और वैज्ञानिक दृष्टि से हिंदी में समाधान प्रदान करें।
+                User Query: {user_query}
+                Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
                 """
-                with st.spinner("AI विश्लेषण कर रहा है..."):
+                with st.spinner("AI is analyzing your recipe..."):
                     response = model.generate_content(prompt)
-                    st.success("परामर्श:")
+                    st.success("Consultant Recommendation:")
                     st.write(response.text)
             except Exception as e:
-                st.error(f"त्रुटि: {e}")
+                st.error(f"Error: {e}")
