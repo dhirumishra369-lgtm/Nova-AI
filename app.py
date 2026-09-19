@@ -1,151 +1,297 @@
 import streamlit as st
-import google.generativeai as genai
 import pandas as pd
+import google.generativeai as genai
+import io
+import datetime
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-# Page Configuration
 st.set_page_config(
-    page_title="Smart Kitchen SaaS & Costing",
-    page_icon="🍳",
+    page_title="Recipe Costing & Yield Calculator",
+    page_icon="🍰",
     layout="wide"
 )
 
-# Safe API Setup (लोकल और क्लाउड दोनों पर बिना क्रैश हुए चलेगा)
-api_key = ""
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        api_key = st.secrets["GEMINI_API_KEY"]
-except Exception:
-    pass
+# ----------------- SESSION STATE & SETUP -----------------
+if "ingredients" not in st.session_state:
+    st.session_state.ingredients = pd.DataFrame([
+        {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
+        {"Ingredient": "Sugar (चीनी)", "Quantity_KG": 8.0, "Rate_Per_KG": 42.0},
+        {"Ingredient": "Silver Vark", "Quantity_KG": 0.05, "Rate_Per_KG": 4000.0},
+        {"Ingredient": "Cardamom/Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0}
+    ])
 
-# अगर secrets नहीं मिले तो साइडबार से API Key लेने का विकल्प
-with st.sidebar:
-    st.header("⚙️ सेटिंग्स")
-    if not api_key:
-        api_key = st.text_input("Gemini API Key डालें:", type="password")
-        if api_key:
-            st.success("API Key सेट हो गई!")
-    else:
-        st.success("✅ API Key कनेक्टेड है")
+# ----------------- EXCEL EXPORT FUNCTION -----------------
+def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost, labor_cost, pack_cost, total_cost, cost_kg, margin_pct, sp_kg, profit_kg):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Costing & Yield Report"
+    ws.views.sheetView[0].showGridLines = True
 
-if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-else:
-    model = None
+    # Title Banner
+    ws.merge_cells("A1:E1")
+    title = ws["A1"]
+    title.value = "RECIPE COSTING & BATCH YIELD REPORT"
+    title.font = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
+    title.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    title.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 35
 
-# Custom Styling
-st.markdown("""
-    <style>
-    .main-title { font-size: 28px; font-weight: bold; color: #1E3A8A; margin-bottom: 5px; }
-    .sub-title { font-size: 15px; color: #4B5563; margin-bottom: 20px; }
-    </style>
-""", unsafe_allow_html=True)
+    # Metadata Row
+    ws["A2"] = "Product / Recipe:"
+    ws["B2"] = recipe_name
+    ws["D2"] = "Date:"
+    ws["E2"] = datetime.date.today().strftime("%d-%b-%Y")
+    ws["A2"].font = Font(name="Calibri", size=11, bold=True, color="4B5563")
+    ws["B2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
+    ws["D2"].font = Font(name="Calibri", size=11, bold=True, color="4B5563")
+    ws["E2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
+    ws.row_dimensions[2].height = 22
 
-st.markdown('<div class="main-title">🍳 Smart Recipe Costing & Inventory Yield System</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">कमर्शियल किचन, बेकरी और मिठाई उत्पादन के लिए सटीक लागत और मार्जिन विश्लेषक</div>', unsafe_allow_html=True)
+    # Section 1 Header
+    ws.merge_cells("A4:E4")
+    sec1 = ws["A4"]
+    sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
+    sec1.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+    sec1.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    ws.row_dimensions[4].height = 24
 
-# Tabs
+    headers = ["S.No.", "Ingredient Name", "Quantity (KG)", "Rate / KG (₹)", "Total Amount (₹)"]
+    for col_idx, h in enumerate(headers, 1):
+        c = ws.cell(row=5, column=col_idx, value=h)
+        c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+        c.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
+    ws.row_dimensions[5].height = 24
+
+    thin_border = Border(
+        left=Side(style='thin', color='E5E7EB'),
+        right=Side(style='thin', color='E5E7EB'),
+        top=Side(style='thin', color='E5E7EB'),
+        bottom=Side(style='thin', color='E5E7EB')
+    )
+
+    start_row = 6
+    for idx, row in df.iterrows():
+        curr = start_row + idx
+        ws.row_dimensions[curr].height = 20
+        ws.cell(row=curr, column=1, value=idx+1).alignment = Alignment(horizontal="center")
+        ws.cell(row=curr, column=2, value=str(row['Ingredient'])).alignment = Alignment(horizontal="left")
+        
+        c3 = ws.cell(row=curr, column=3, value=float(row['Quantity_KG']))
+        c3.number_format = '#,##0.00'
+        c3.alignment = Alignment(horizontal="right")
+        
+        c4 = ws.cell(row=curr, column=4, value=float(row['Rate_Per_KG']))
+        c4.number_format = '₹#,##0.00'
+        c4.alignment = Alignment(horizontal="right")
+        
+        c5 = ws.cell(row=curr, column=5, value=f"=C{curr}*D{curr}")
+        c5.number_format = '₹#,##0.00'
+        c5.alignment = Alignment(horizontal="right")
+
+        bg_color = "F9FAFB" if idx % 2 == 1 else "FFFFFF"
+        for c_idx in range(1, 6):
+            ws.cell(row=curr, column=c_idx).border = thin_border
+            ws.cell(row=curr, column=c_idx).fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+
+    tot_r = start_row + len(df)
+    ws.row_dimensions[tot_r].height = 22
+    ws.cell(row=tot_r, column=2, value="Subtotal (Raw Materials)").font = Font(name="Calibri", size=11, bold=True)
+    ws.cell(row=tot_r, column=3, value=f"=SUM(C{start_row}:C{tot_r-1})").font = Font(name="Calibri", size=11, bold=True)
+    ws.cell(row=tot_r, column=3).number_format = '#,##0.00'
+    ws.cell(row=tot_r, column=3).alignment = Alignment(horizontal="right")
+    
+    sub_amt = ws.cell(row=tot_r, column=5, value=f"=SUM(E{start_row}:E{tot_r-1})")
+    sub_amt.font = Font(name="Calibri", size=11, bold=True)
+    sub_amt.number_format = '₹#,##0.00'
+    sub_amt.alignment = Alignment(horizontal="right")
+
+    sum_border = Border(top=Side(style='thin', color='1E3A8A'), bottom=Side(style='double', color='1E3A8A'))
+    for c_idx in range(1, 6):
+        ws.cell(row=tot_r, column=c_idx).border = sum_border
+        ws.cell(row=tot_r, column=c_idx).fill = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+
+    # Section 2 Header
+    sum_start = tot_r + 2
+    ws.merge_cells(f"A{sum_start}:E{sum_start}")
+    sec2 = ws[f"A{sum_start}"]
+    sec2.value = "2. YIELD LOSS, OVERHEADS & FINANCIAL SUMMARY"
+    sec2.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+    sec2.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    ws.row_dimensions[sum_start].height = 24
+
+    metrics = [
+        ("Total Raw Material Batch Weight", f"=C{tot_r}", "KG", '#,##0.00'),
+        ("Process / Moisture Loss (%)", loss_pct / 100.0, "%", '0.0%'),
+        ("Final Net Yield Output", f"=E{sum_start+1}*(1-E{sum_start+2})", "KG", '#,##0.00'),
+        ("Raw Material Total Cost", f"=E{tot_r}", "INR", '₹#,##0.00'),
+        ("Labour & Fuel Overheads", float(labor_cost), "INR", '₹#,##0.00'),
+        ("Packaging & Box Cost", float(pack_cost), "INR", '₹#,##0.00'),
+        ("Total Batch Production Cost", f"=SUM(E{sum_start+4}:E{sum_start+6})", "INR", '₹#,##0.00'),
+        ("Final Cost Per KG (True Cost)", f"=E{sum_start+7}/E{sum_start+3}", "INR/KG", '₹#,##0.00'),
+        ("Target Profit Margin (%)", margin_pct / 100.0, "%", '0.0%'),
+        ("Suggested Selling Price Per KG", f"=E{sum_start+8}/(1-E{sum_start+9})", "INR/KG", '₹#,##0.00'),
+        ("Net Profit Per KG", f"=E{sum_start+10}-E{sum_start+8}", "INR/KG", '₹#,##0.00'),
+    ]
+
+    for idx, (label, val, unit, num_fmt) in enumerate(metrics):
+        r = sum_start + 1 + idx
+        ws.row_dimensions[r].height = 21
+        ws.merge_cells(f"A{r}:C{r}")
+        ws[f"A{r}"] = label
+        ws[f"A{r}"].alignment = Alignment(horizontal="left", vertical="center")
+        
+        ws[f"D{r}"] = unit
+        ws[f"D{r}"].alignment = Alignment(horizontal="center", vertical="center")
+        ws[f"D{r}"].font = Font(name="Calibri", size=10, color="6B7280")
+        
+        v = ws[f"E{r}"]
+        v.value = val
+        v.number_format = num_fmt
+        v.alignment = Alignment(horizontal="right", vertical="center")
+
+        is_high = label in ["Total Batch Production Cost", "Final Cost Per KG (True Cost)", "Suggested Selling Price Per KG", "Net Profit Per KG"]
+        fill_col = "FEF3C7" if ("Selling" in label or "Profit" in label) else ("E0F2FE" if is_high else "FFFFFF")
+        for c_idx in range(1, 6):
+            cell = ws.cell(row=r, column=c_idx)
+            cell.border = thin_border
+            cell.fill = PatternFill(start_color=fill_col, end_color=fill_col, fill_type="solid")
+            if is_high:
+                cell.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+
+    ws.column_dimensions["A"].width = 8
+    ws.column_dimensions["B"].width = 30
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 22
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+# ----------------- UI TABS -----------------
 tab1, tab2 = st.tabs(["📊 रेसिपी कॉस्टिंग & यील्ड कैलकुलेटर", "🤖 AI शेफ़ / बिज़नेस कंसल्टेंट"])
 
-# ==================== TAB 1: CALCULATOR ====================
 with tab1:
-    col_left, col_right = st.columns([1.2, 0.8], gap="large")
+    st.caption("कमर्शियल किचन, बेकरी और मिठाई उत्पादन के लिए सटीक लागत और मार्जिन विश्लेषक")
+    
+    col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
     with col_left:
         st.subheader("1. बैच और उत्पाद विवरण")
-        dish_name = st.text_input("उत्पाद / रेसिपी का नाम", value="Premium Kaju Katli")
-        
-        st.write("**सामग्री विवरण (Ingredients & Rates):**")
-        st.caption("टेबल में सीधे क्लिक करके इंग्रीडिएंट, मात्रा (kg) और रेट प्रति kg बदल सकते हैं:")
+        recipe_name = st.text_input("उत्पाद / रेसिपी का नाम", value="Premium Kaju Katli")
 
-        default_data = {
-            "Ingredient": ["Kaju (Cashew)", "Sugar (चीनी)", "Silver Vark", "Cardamom/Ghee"],
-            "Quantity_KG": [10.0, 8.0, 0.05, 0.20],
-            "Rate_Per_KG": [680.0, 42.0, 4000.0, 600.0]
-        }
+        st.markdown("**सामग्री विवरण (Ingredients & Rates):**")
+        st.caption("टेबल में सीधे क्लिक करके इंग्रीडिएंट, मात्रा (kg) और रेट प्रति kg बदल सकते हैं:")
         
         edited_df = st.data_editor(
-            pd.DataFrame(default_data),
+            st.session_state.ingredients,
             num_rows="dynamic",
-            use_container_width=True
+            use_container_width=True,
+            column_config={
+                "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
+                "Quantity_KG": st.column_config.NumberColumn("Quantity_KG", min_value=0.001, format="%.3f"),
+                "Rate_Per_KG": st.column_config.NumberColumn("Rate_Per_KG", min_value=0.0, format="₹%.2f"),
+            }
         )
 
         st.subheader("2. यील्ड और अतिरिक्त खर्चे")
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            cooking_loss_pct = st.number_input("कुकिंग / मॉइस्चर लॉस (%)", min_value=0.0, max_value=50.0, value=12.0, step=0.5)
-            packaging_cost = st.number_input("पैकेजिंग खर्च (कुल बैच का ₹)", min_value=0.0, value=250.0, step=10.0)
-        with col_c2:
-            labor_gas_cost = st.number_input("लेबर + गैस/बिजली खर्च (₹)", min_value=0.0, value=400.0, step=20.0)
-            target_margin_pct = st.number_input("वांछित मुनाफ़ा मार्जिन (%)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            loss_percent = st.number_input("कुकिंग / मॉइस्चर लॉस (%)", min_value=0.0, max_value=90.0, value=12.0, step=0.5)
+        with c2:
+            labor_gas_cost = st.number_input("लेबर + गैस खर्च (₹)", min_value=0.0, value=400.0, step=50.0)
+        with c3:
+            packaging_cost = st.number_input("पैकेजिंग खर्च (₹)", min_value=0.0, value=250.0, step=50.0)
 
-    # Calculations
-    edited_df["Total_Cost"] = edited_df["Quantity_KG"] * edited_df["Rate_Per_KG"]
-    raw_material_cost = edited_df["Total_Cost"].sum()
-    raw_material_weight = edited_df["Quantity_KG"].sum()
+        target_margin = st.slider("टारगेट ग्रॉस मार्जिन (Target Margin %)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
 
-    # Final Yield Weight
-    final_yield_weight = raw_material_weight * (1 - (cooking_loss_pct / 100))
-    total_batch_cost = raw_material_cost + packaging_cost + labor_gas_cost
+    # ----------------- CALCULATIONS -----------------
+    clean_df = edited_df.dropna(subset=['Quantity_KG', 'Rate_Per_KG']).copy()
+    raw_material_weight = clean_df['Quantity_KG'].sum()
+    clean_df['Cost'] = clean_df['Quantity_KG'] * clean_df['Rate_Per_KG']
+    raw_material_cost = clean_df['Cost'].sum()
 
-    cost_per_kg = (total_batch_cost / final_yield_weight) if final_yield_weight > 0 else 0
-    selling_price_per_kg = cost_per_kg / (1 - (target_margin_pct / 100)) if target_margin_pct < 100 else 0
+    final_yield_kg = raw_material_weight * (1 - (loss_percent / 100.0))
+    total_batch_cost = raw_material_cost + labor_gas_cost + packaging_cost
+
+    cost_per_kg = (total_batch_cost / final_yield_kg) if final_yield_kg > 0 else 0.0
+    selling_price_per_kg = (cost_per_kg / (1 - (target_margin / 100.0))) if target_margin < 100 else 0.0
     profit_per_kg = selling_price_per_kg - cost_per_kg
 
     with col_right:
         st.subheader("📋 आउटपुट और कॉस्ट समरी")
-        
-        st.metric("कुल बैच लागत (Total Batch Cost)", f"₹{total_batch_cost:,.2f}")
-        st.metric("फ़ाइनल आउटपुट वजन (Final Yield)", f"{final_yield_weight:.2f} KG", delta=f"-{cooking_loss_pct}% Process Loss", delta_color="inverse")
-        
-        st.divider()
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.metric("लागत प्रति KG (Cost/KG)", f"₹{cost_per_kg:,.2f}")
-        with col_m2:
-            st.metric("सुझाया गया विक्रय मूल्य", f"₹{selling_price_per_kg:,.2f}")
+        st.markdown(f"""
+        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <p style="margin:0; font-size:14px; color:#64748B;">कुल बैच लागत (Total Batch Cost)</p>
+            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
+            <p style="margin:0; font-size:14px; color:#64748B;">फ़ाइनल आउटपुट वज़न (Final Yield)</p>
+            <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
+            <span style="color:#DC2626; font-size:13px; font-weight:600;">↓ {loss_percent}% Process Loss</span>
+            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #E2E8F0;">
+            <div style="display: flex; justify-content: space-between;">
+                <div>
+                    <p style="margin:0; font-size:13px; color:#64748B;">लागत प्रति KG (Cost/KG)</p>
+                    <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
+                </div>
+                <div>
+                    <p style="margin:0; font-size:13px; color:#64748B;">सुझाया गया विक्रय मूल्य</p>
+                    <h3 style="margin:0; color:#16A34A;">₹{selling_price_per_kg:,.2f}</h3>
+                </div>
+            </div>
+            <p style="margin:12px 0 0 0; font-size:13px; color:#2563EB; font-weight:600;">
+                💡 शुद्ध मुनाफ़ा: ₹{profit_per_kg:,.2f} प्रति KG ({target_margin}% मार्जिन पर)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.info(f"💡 **शुद्ध मुनाफ़ा:** ₹{profit_per_kg:,.2f} प्रति KG ({target_margin_pct}% मार्जिन पर)")
+        # Download Professional Excel File
+        excel_file_bytes = generate_professional_excel(
+            recipe_name, clean_df, loss_percent, final_yield_kg,
+            raw_material_cost, labor_gas_cost, packaging_cost,
+            total_batch_cost, cost_per_kg, target_margin,
+            selling_price_per_kg, profit_per_kg
+        )
 
-        # Export Button
-        summary_export = pd.DataFrame([{
-            "Product": dish_name,
-            "Raw Weight (KG)": raw_material_weight,
-            "Final Yield (KG)": round(final_yield_weight, 2),
-            "Raw Material Cost": round(raw_material_cost, 2),
-            "Total Batch Cost": round(total_batch_cost, 2),
-            "Cost Per KG": round(cost_per_kg, 2),
-            "Selling Price Per KG": round(selling_price_per_kg, 2)
-        }])
-        
         st.download_button(
-            label="📥 कॉस्टिंग रिपोर्ट डाउनलोड करें (CSV)",
-            data=summary_export.to_csv(index=False),
-            file_name=f"{dish_name}_costing_summary.csv",
-            mime="text/csv",
+            label="📥 डाउनलोड प्रोफेशनल एक्सेल रिपोर्ट (.xlsx)",
+            data=excel_file_bytes,
+            file_name=f"{recipe_name.replace(' ', '_')}_Costing_Sheet.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
 
-# ==================== TAB 2: AI CONSULTANT ====================
 with tab2:
-    st.subheader("💡 AI कमर्शियल किचन असिस्टेंट")
-    st.caption("रेसिपी में वेस्टेज कम करने, शेल्फ लाइफ बढ़ाने या पैकेजिंग ऑप्टिमाइज़ करने के लिए पूछें:")
-
-    user_query = st.text_area("अपना सवाल लिखें:", placeholder="जैसे: काजू कतली में मॉइस्चर लॉस कम करने और 15 दिन शेल्फ लाइफ रखने के लिए क्या सावधानियां रखें?")
+    st.subheader("🤖 AI शेफ़ और प्रोडक्शन सलाहकार")
+    st.caption("रेसिपी सुधार, शेल्फ-लाइफ बढ़ाने, यील्ड ऑप्टिमाइज़ेशन या पैकेजिंग पर सलाह लें")
     
-    if st.button("पूछें (Analyze with AI)"):
-        if not model:
-            st.error("कृपया बाईं तरफ (Sidebar) में अपनी Gemini API Key डालें।")
-        elif not user_query.strip():
-            st.warning("कृपया कोई सवाल लिखें।")
+    api_key = st.text_input("Gemini API Key दर्ज करें", type="password")
+    user_query = st.text_area("अपना सवाल लिखें", placeholder="उदा. काजू कतली की शेल्फ-लाइफ बिना प्रिज़र्वेटिव के कैसे बढ़ाएँ? या कुकिंग लॉस 12% से कम कैसे करें?")
+    
+    if st.button("AI से सलाह लें", type="primary"):
+        if not api_key:
+            st.warning("कृपया पहले अपनी Gemini API Key दर्ज करें।")
+        elif not user_query:
+            st.warning("कृपया अपना प्रश्न लिखें।")
         else:
-            with st.spinner("AI विश्लेषण कर रहा है..."):
-                system_prompt = f"""
-                तुम एक सीनियर कमर्शियल शेफ़ और प्रोडक्शन मैनेजर हो। 
-                वर्तमान रेसिपी: {dish_name}
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                prompt = f"""
+                आप एक अनुभवी कमर्शियल फ़ूड और बेकरी प्रोडक्शन कंसल्टेंट हैं।
+                वर्तमान उत्पाद: {recipe_name}
+                कच्चे माल का कुल वज़न: {raw_material_weight:.2f} kg
+                प्रोसेस लॉस: {loss_percent}%
+                फ़ाइनल यील्ड: {final_yield_kg:.2f} kg
                 लागत प्रति किलो: ₹{cost_per_kg:.2f}
-                यूज़र का सवाल: {user_query}
-                व्यावहारिक, सटीक और इंडस्ट्री-ग्रेड सलाह दो।
+
+                उपयोगकर्ता का प्रश्न: {user_query}
+                कृपया व्यावहारिक, सटीक और वैज्ञानिक दृष्टि से हिंदी में समाधान प्रदान करें।
                 """
-                response = model.generate_content(system_prompt)
-                st.markdown(response.text)
+                with st.spinner("AI विश्लेषण कर रहा है..."):
+                    response = model.generate_content(prompt)
+                    st.success("परामर्श:")
+                    st.write(response.text)
+            except Exception as e:
+                st.error(f"त्रुटि: {e}")
