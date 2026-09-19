@@ -1,32 +1,18 @@
 import streamlit as st
 import google.generativeai as genai
 
-st.set_page_config(page_title="Fast AI App", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="Fast AI Assistant", page_icon="⚡", layout="centered")
 
-# Clean standard styling without messy custom font hacks
 st.title("⚡ Fast AI Assistant & Search")
-st.caption("High-Performance Assistant | Powered by Dhirendra Mishra")
+st.caption("High-Performance Assistant | Direct Access Mode")
 
-# Password Security
-password = st.text_input("🔒 Enter Password", type="password")
-if password != "Dhirendra@123":
-    st.warning("Please enter the correct password to access the app.")
-    st.stop()
-
-# API Key Input
-api_key = st.text_input("🔑 Enter Gemini API Key", type="password")
-
-# User Query / Search Box
-user_prompt = st.text_area("✍️ Apana sawal yahan likhein:")
+user_prompt = st.text_area("✍️ Apana sawal ya search query yahan likhein:")
 
 if st.button("🚀 Run Fast AI", type="primary"):
-    if not api_key:
-        st.error("Please enter your Gemini API Key.")
-    elif not user_prompt:
-        st.warning("Please enter a question or prompt.")
+    if not user_prompt:
+        st.warning("Kripya koi sawal ya prompt darj karein.")
     else:
         try:
-            genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-1.5-flash")
             
             with st.spinner("AI is thinking... ⚡"):
