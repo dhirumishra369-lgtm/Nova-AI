@@ -1,175 +1,151 @@
 import streamlit as st
-import requests
-import json
-import base64
-import time
+import google.generativeai as genai
+import pandas as pd
 
-# पेज सेटअप
+# Page Configuration
 st.set_page_config(
-    page_title="Navo Super Fast AI | Dhirendra Mishra",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    page_title="Smart Kitchen SaaS & Costing",
+    page_icon="🍳",
+    layout="wide"
 )
 
-# मोबाइल स्क्रीन अलाइनमेंट CSS
-st.markdown("""
-<style>
-    /* हेडर को नेविगेशन बार के नीचे लाने के लिए सही मार्जिन */
-    .block-container {
-        padding-top: 3.5rem !important;
-        padding-bottom: 5rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }
+# Safe API Setup (लोकल और क्लाउड दोनों पर बिना क्रैश हुए चलेगा)
+api_key = ""
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    pass
 
-    /* कॉम्पैक्ट क्लीन हेडर कार्ड */
-    .header-card {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        padding: 12px 14px;
-        margin-bottom: 14px;
-    }
-    
-    .title-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-    }
-
-    .main-title {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #1d4ed8;
-        margin: 0;
-        line-height: 1.2;
-    }
-
-    .author-badge {
-        background-color: #0f172a;
-        color: #38bdf8;
-        padding: 3px 8px;
-        border-radius: 14px;
-        font-size: 0.70rem;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .sub-title {
-        font-size: 0.76rem;
-        color: #64748b;
-        margin-top: 4px;
-        margin-bottom: 0;
-    }
-
-    /* चैट मैसेज स्टाइल */
-    [data-testid="stChatMessage"] {
-        padding: 10px 12px !important;
-        margin-bottom: 8px !important;
-        border-radius: 10px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# हेडर सेक्शन
-st.markdown("""
-<div class="header-card">
-    <div class="title-row">
-        <div class="main-title">⚡ Navo Super Fast AI</div>
-        <div class="author-badge">By Dhirendra Mishra</div>
-    </div>
-    <div class="sub-title">High-Performance Intelligent Assistant</div>
-</div>
-""", unsafe_allow_html=True)
-
-API_KEY = "AQ.Ab8RN6I8IV-N4P4uqzuUsH1VD1IrxnjhzARZZZLlMdg1-G4ixA"
-
-# साइडबार
+# अगर secrets नहीं मिले तो साइडबार से API Key लेने का विकल्प
 with st.sidebar:
-    st.markdown("### ⚙️ Control Center")
-    st.success("🟢 **Navo Engine : Active**")
-    
-    st.markdown("---")
-    st.markdown("#### 📎 Attach File")
-    uploaded_file = st.file_uploader(
-        "Upload Image or PDF", 
-        type=["png", "jpg", "jpeg", "pdf"]
-    )
-    if uploaded_file:
-        st.success(f"Attached: {uploaded_file.name}")
+    st.header("⚙️ सेटिंग्स")
+    if not api_key:
+        api_key = st.text_input("Gemini API Key डालें:", type="password")
+        if api_key:
+            st.success("API Key सेट हो गई!")
+    else:
+        st.success("✅ API Key कनेक्टेड है")
+
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+else:
+    model = None
+
+# Custom Styling
+st.markdown("""
+    <style>
+    .main-title { font-size: 28px; font-weight: bold; color: #1E3A8A; margin-bottom: 5px; }
+    .sub-title { font-size: 15px; color: #4B5563; margin-bottom: 20px; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="main-title">🍳 Smart Recipe Costing & Inventory Yield System</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">कमर्शियल किचन, बेकरी और मिठाई उत्पादन के लिए सटीक लागत और मार्जिन विश्लेषक</div>', unsafe_allow_html=True)
+
+# Tabs
+tab1, tab2 = st.tabs(["📊 रेसिपी कॉस्टिंग & यील्ड कैलकुलेटर", "🤖 AI शेफ़ / बिज़नेस कंसल्टेंट"])
+
+# ==================== TAB 1: CALCULATOR ====================
+with tab1:
+    col_left, col_right = st.columns([1.2, 0.8], gap="large")
+
+    with col_left:
+        st.subheader("1. बैच और उत्पाद विवरण")
+        dish_name = st.text_input("उत्पाद / रेसिपी का नाम", value="Premium Kaju Katli")
         
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+        st.write("**सामग्री विवरण (Ingredients & Rates):**")
+        st.caption("टेबल में सीधे क्लिक करके इंग्रीडिएंट, मात्रा (kg) और रेट प्रति kg बदल सकते हैं:")
 
-# चैट हिस्ट्री
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+        default_data = {
+            "Ingredient": ["Kaju (Cashew)", "Sugar (चीनी)", "Silver Vark", "Cardamom/Ghee"],
+            "Quantity_KG": [10.0, 8.0, 0.05, 0.20],
+            "Rate_Per_KG": [680.0, 42.0, 4000.0, 600.0]
+        }
+        
+        edited_df = st.data_editor(
+            pd.DataFrame(default_data),
+            num_rows="dynamic",
+            use_container_width=True
+        )
 
-# मैसेज दिखाना
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        st.subheader("2. यील्ड और अतिरिक्त खर्चे")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            cooking_loss_pct = st.number_input("कुकिंग / मॉइस्चर लॉस (%)", min_value=0.0, max_value=50.0, value=12.0, step=0.5)
+            packaging_cost = st.number_input("पैकेजिंग खर्च (कुल बैच का ₹)", min_value=0.0, value=250.0, step=10.0)
+        with col_c2:
+            labor_gas_cost = st.number_input("लेबर + गैस/बिजली खर्च (₹)", min_value=0.0, value=400.0, step=20.0)
+            target_margin_pct = st.number_input("वांछित मुनाफ़ा मार्जिन (%)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
 
-# इनपुट बॉक्स
-if prompt := st.chat_input("Apna sawal yahan likhein..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Calculations
+    edited_df["Total_Cost"] = edited_df["Quantity_KG"] * edited_df["Rate_Per_KG"]
+    raw_material_cost = edited_df["Total_Cost"].sum()
+    raw_material_weight = edited_df["Quantity_KG"].sum()
 
-    contents_payload = []
-    for msg in st.session_state.messages[:-1]:
-        api_role = "user" if msg["role"] == "user" else "model"
-        contents_payload.append({
-            "role": api_role,
-            "parts": [{"text": msg["content"]}]
-        })
+    # Final Yield Weight
+    final_yield_weight = raw_material_weight * (1 - (cooking_loss_pct / 100))
+    total_batch_cost = raw_material_cost + packaging_cost + labor_gas_cost
 
-    current_parts = [{"text": prompt}]
-    if uploaded_file is not None:
-        file_bytes = uploaded_file.read()
-        encoded_file = base64.b64encode(file_bytes).decode("utf-8")
-        current_parts.append({
-            "inline_data": {
-                "mime_type": uploaded_file.type,
-                "data": encoded_file
-            }
-        })
+    cost_per_kg = (total_batch_cost / final_yield_weight) if final_yield_weight > 0 else 0
+    selling_price_per_kg = cost_per_kg / (1 - (target_margin_pct / 100)) if target_margin_pct < 100 else 0
+    profit_per_kg = selling_price_per_kg - cost_per_kg
 
-    contents_payload.append({
-        "role": "user",
-        "parts": current_parts
-    })
+    with col_right:
+        st.subheader("📋 आउटपुट और कॉस्ट समरी")
+        
+        st.metric("कुल बैच लागत (Total Batch Cost)", f"₹{total_batch_cost:,.2f}")
+        st.metric("फ़ाइनल आउटपुट वजन (Final Yield)", f"{final_yield_weight:.2f} KG", delta=f"-{cooking_loss_pct}% Process Loss", delta_color="inverse")
+        
+        st.divider()
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric("लागत प्रति KG (Cost/KG)", f"₹{cost_per_kg:,.2f}")
+        with col_m2:
+            st.metric("सुझाया गया विक्रय मूल्य", f"₹{selling_price_per_kg:,.2f}")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": contents_payload}
+        st.info(f"💡 **शुद्ध मुनाफ़ा:** ₹{profit_per_kg:,.2f} प्रति KG ({target_margin_pct}% मार्जिन पर)")
 
-    reply = ""
-    with st.spinner("Thinking..."):
-        for attempt in range(3):
-            try:
-                res = requests.post(url, headers=headers, json=payload)
-                data = res.json()
-                if "candidates" in data:
-                    reply = data["candidates"][0]["content"]["parts"][0]["text"]
-                    break
-                elif data.get("error", {}).get("code") == 503:
-                    time.sleep(2)
-                    continue
-                else:
-                    reply = f"API Response: {data}"
-                    break
-            except Exception as e:
-                reply = f"Error: {e}"
-                break
+        # Export Button
+        summary_export = pd.DataFrame([{
+            "Product": dish_name,
+            "Raw Weight (KG)": raw_material_weight,
+            "Final Yield (KG)": round(final_yield_weight, 2),
+            "Raw Material Cost": round(raw_material_cost, 2),
+            "Total Batch Cost": round(total_batch_cost, 2),
+            "Cost Per KG": round(cost_per_kg, 2),
+            "Selling Price Per KG": round(selling_price_per_kg, 2)
+        }])
+        
+        st.download_button(
+            label="📥 कॉस्टिंग रिपोर्ट डाउनलोड करें (CSV)",
+            data=summary_export.to_csv(index=False),
+            file_name=f"{dish_name}_costing_summary.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
-    if not reply:
-        reply = "Server busy hai. Kripya punah prayas karein."
+# ==================== TAB 2: AI CONSULTANT ====================
+with tab2:
+    st.subheader("💡 AI कमर्शियल किचन असिस्टेंट")
+    st.caption("रेसिपी में वेस्टेज कम करने, शेल्फ लाइफ बढ़ाने या पैकेजिंग ऑप्टिमाइज़ करने के लिए पूछें:")
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-    with st.chat_message("assistant"):
-        st.markdown(reply)
+    user_query = st.text_area("अपना सवाल लिखें:", placeholder="जैसे: काजू कतली में मॉइस्चर लॉस कम करने और 15 दिन शेल्फ लाइफ रखने के लिए क्या सावधानियां रखें?")
+    
+    if st.button("पूछें (Analyze with AI)"):
+        if not model:
+            st.error("कृपया बाईं तरफ (Sidebar) में अपनी Gemini API Key डालें।")
+        elif not user_query.strip():
+            st.warning("कृपया कोई सवाल लिखें।")
+        else:
+            with st.spinner("AI विश्लेषण कर रहा है..."):
+                system_prompt = f"""
+                तुम एक सीनियर कमर्शियल शेफ़ और प्रोडक्शन मैनेजर हो। 
+                वर्तमान रेसिपी: {dish_name}
+                लागत प्रति किलो: ₹{cost_per_kg:.2f}
+                यूज़र का सवाल: {user_query}
+                व्यावहारिक, सटीक और इंडस्ट्री-ग्रेड सलाह दो।
+                """
+                response = model.generate_content(system_prompt)
+                st.markdown(response.text)
