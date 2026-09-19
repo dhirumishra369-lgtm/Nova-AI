@@ -6,11 +6,10 @@ st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", l
 st.title("⚡ Nova-AI: Recipe Costing, Yield & Production Assistant")
 st.caption("Commercial Kitchen, Confectionery & Bakery Manufacturing Intelligence")
 
-# Initialize Session State for API Key so it never gets lost on click
+# Initialize Session State for API Key
 if "api_key" not in st.session_state:
     st.session_state.api_key = ""
 
-# API Key input linked with session state
 st.session_state.api_key = st.text_input(
     "🔑 Yahan apni Gemini API Key darj karein:", 
     type="password", 
@@ -40,8 +39,11 @@ with tab2:
             st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
         else:
             try:
+                # Configuring client directly
                 genai.configure(api_key=st.session_state.api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                # Using the standard gemini-1.5-flash client call
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 with st.spinner("AI Chef is analyzing... ⚡"):
                     response = model.generate_content(user_prompt)
@@ -49,4 +51,4 @@ with tab2:
                 st.success("✅ AI Result:")
                 st.write(response.text)
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error 400/API Details: {e}")
