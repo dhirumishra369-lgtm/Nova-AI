@@ -6,9 +6,7 @@ st.set_page_config(page_title="Fast AI Assistant", page_icon="⚡", layout="cent
 st.title("⚡ Fast AI Assistant & Search")
 st.caption("High-Performance Assistant | Direct Access Mode")
 
-# API Key input box
 api_key = st.text_input("🔑 Gemini API Key darj karein:", type="password")
-
 user_prompt = st.text_area("✍️ Apana sawal ya search query yahan likhein:")
 
 if st.button("🚀 Run Fast AI", type="primary"):
@@ -20,14 +18,22 @@ if st.button("🚀 Run Fast AI", type="primary"):
         try:
             genai.configure(api_key=api_key)
             
-            # Using the standard stable model endpoint
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # Automatically find a working model from your account
+            available_model = None
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    available_model = m.name
+                    break
             
-            with st.spinner("AI is thinking... ⚡"):
+            if not available_model:
+                available_model = "gemini-1.5-flash"
+                
+            model = genai.GenerativeModel(available_model)
+            
+            with st.spinner(f"AI is thinking using {available_model}... ⚡"):
                 response = model.generate_content(user_prompt)
                 
             st.success("✅ Result:")
             st.write(response.text)
         except Exception as e:
             st.error(f"Error aaya: {e}")
-            st.info("💡 Sujhav: Kripya sunishchit karein ki aapne Google AI Studio (`aistudio.google.com`) se bilkul nayi aur sahi API Key copy karke yahan daali hai.")
