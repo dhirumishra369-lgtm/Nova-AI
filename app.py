@@ -7,291 +7,252 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 st.set_page_config(
-    page_title="Recipe Costing & Yield Calculator",
-    page_icon="🍰",
+    page_title="ERP Inventory, Closing & Recipe Costing System",
+    page_icon="🏭",
     layout="wide"
 )
 
-# ----------------- SESSION STATE & SETUP -----------------
-if "ingredients" not in st.session_state:
-    st.session_state.ingredients = pd.DataFrame([
-        {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
-        {"Ingredient": "Sugar", "Quantity_KG": 8.0, "Rate_Per_KG": 42.0},
-        {"Ingredient": "Silver Vark", "Quantity_KG": 0.05, "Rate_Per_KG": 4000.0},
-        {"Ingredient": "Cardamom / Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0}
+# ----------------- 1. CENTRAL ITEM CODE MASTER -----------------
+# All Items, Descriptions, Units and Rates driven strictly by Item Code
+ITEM_MASTER = {
+    # Bakery Items
+    "FGBK0003": {"name": "BURGER BUN SMALL", "dept": "BAKERY", "uom": "PAC", "price": 7.87, "opening": 286.0},
+    "FGBK0030": {"name": "WHEAT PIZZA BASE", "dept": "BAKERY", "uom": "PAC", "price": 18.50, "opening": 150.0},
+    "FGBK0046": {"name": "JALAPENO SOURDOUGH 300GM", "dept": "BAKERY", "uom": "PAC", "price": 65.00, "opening": 90.0},
+    "FGBK0052": {"name": "CAKE CHOCOCHIPS 1KG E/L", "dept": "BAKERY", "uom": "PCS", "price": 350.00, "opening": 45.0},
+    "SFGBK0001": {"name": "BROWN BREAD DOUGH / BASE", "dept": "BAKERY", "uom": "PCS", "price": 0.05, "opening": 207.0},
+    "SFGBK0002": {"name": "BURGER BUN UNBAKED", "dept": "BAKERY", "uom": "PCS", "price": 1.59, "opening": 120.0},
+    
+    # Cafe Items
+    "FGCK0007": {"name": "ALMOND & BROCCOLI SOUP", "dept": "CAFE", "uom": "PCS", "price": 120.00, "opening": 50.0},
+    "FGCK0023": {"name": "CHEESY CIGAR ROLL", "dept": "CAFE", "uom": "PCS", "price": 85.00, "opening": 75.0},
+    "FGCK0026": {"name": "CLASSIC ACAI BOWL", "dept": "CAFE", "uom": "PCS", "price": 195.00, "opening": 30.0},
+    "FGCK0028": {"name": "COLE SLAW SANDWICH", "dept": "CAFE", "uom": "PCS", "price": 95.00, "opening": 60.0},
+    "SFGCK0001": {"name": "PANEER TIKKA MARINATION BASE", "dept": "CAFE", "uom": "KG", "price": 210.00, "opening": 25.0},
+
+    # Sweets Items
+    "FGSW0037": {"name": "MANGO KAJU CAKE", "dept": "SWEETS", "uom": "PCS", "price": 450.00, "opening": 1860.0},
+    "FGSW0038": {"name": "MANGO KAJU SANDWICH", "dept": "SWEETS", "uom": "PCS", "price": 480.00, "opening": 340.0},
+    "FGSW0039": {"name": "CRUNCHY OREO", "dept": "SWEETS", "uom": "PCS", "price": 320.00, "opening": 440.0},
+    "FGSW0091": {"name": "MEWABITE CHOCOLATE PIECE", "dept": "SWEETS", "uom": "PCS", "price": 25.00, "opening": 2460.0},
+    "RM0416": {"name": "SILVER LEAF (CHANDI VARK)", "dept": "SWEETS", "uom": "PCS", "price": 140.00, "opening": 2600.0},
+    
+    # Savoury Items
+    "RM0279": {"name": "MAIDA (REFINED FLOUR)", "dept": "SAVOURY", "uom": "KGS", "price": 38.00, "opening": 70.0},
+    "RM0033": {"name": "BLACK MASOOR DAL", "dept": "SAVOURY", "uom": "KGS", "price": 95.00, "opening": 40.0},
+    "RM0366": {"name": "POTATO (COLD STORAGE)", "dept": "SAVOURY", "uom": "KGS", "price": 22.00, "opening": 30.0},
+    "RM0459": {"name": "SUNFLOWER OIL", "dept": "SAVOURY", "uom": "LTR", "price": 115.00, "opening": 25.0},
+}
+
+CODE_OPTIONS = list(ITEM_MASTER.keys())
+
+# ----------------- SESSION STATE SETUP -----------------
+if "audit_items" not in st.session_state:
+    st.session_state.audit_items = pd.DataFrame([
+        {"Item_Code": "FGBK0003", "Store_Issued": 20.0, "Sales_Consumed": 250.0, "Wastage": 2.0, "Physical_Closing": 54.0},
+        {"Item_Code": "FGCK0007", "Store_Issued": 10.0, "Sales_Consumed": 40.0, "Wastage": 1.0, "Physical_Closing": 19.0},
+        {"Item_Code": "FGSW0037", "Store_Issued": 200.0, "Sales_Consumed": 1500.0, "Wastage": 10.0, "Physical_Closing": 550.0},
+        {"Item_Code": "RM0279", "Store_Issued": 50.0, "Sales_Consumed": 60.0, "Wastage": 2.0, "Physical_Closing": 58.0},
     ])
 
-# ----------------- EXCEL EXPORT FUNCTION -----------------
-def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost, labor_cost, pack_cost, total_cost, cost_kg, margin_pct, sp_kg, profit_kg):
+# ----------------- MULTI-SHEET EXCEL EXPORT FUNCTION -----------------
+def generate_closing_audit_excel(df_audit):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Costing & Yield Report"
+    ws.title = "Closing_Audit_Report"
     ws.views.sheetView[0].showGridLines = True
 
-    # Title Banner
-    ws.merge_cells("A1:E1")
-    title = ws["A1"]
-    title.value = "RECIPE COSTING & BATCH YIELD REPORT"
-    title.font = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
-    title.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-    title.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 35
-
-    # Metadata Row
-    ws["A2"] = "Product / Recipe:"
-    ws["B2"] = recipe_name
-    ws["D2"] = "Date:"
-    ws["E2"] = datetime.date.today().strftime("%d-%b-%Y")
-    ws["A2"].font = Font(name="Calibri", size=11, bold=True, color="4B5563")
-    ws["B2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
-    ws["D2"].font = Font(name="Calibri", size=11, bold=True, color="4B5563")
-    ws["E2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
-    ws.row_dimensions[2].height = 22
-
-    # Section 1 Header: Raw Material
-    ws.merge_cells("A4:E4")
-    sec1 = ws["A4"]
-    sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
-    sec1.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
-    sec1.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
-    ws.row_dimensions[4].height = 24
-
-    headers = ["S.No.", "Ingredient Name", "Quantity (KG)", "Rate / KG (₹)", "Total Amount (₹)"]
-    for col_idx, h in enumerate(headers, 1):
-        c = ws.cell(row=5, column=col_idx, value=h)
-        c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-        c.fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-        c.alignment = Alignment(horizontal="center" if col_idx != 2 else "left", vertical="center")
-    ws.row_dimensions[5].height = 24
-
-    thin_border = Border(
-        left=Side(style='thin', color='E5E7EB'),
-        right=Side(style='thin', color='E5E7EB'),
-        top=Side(style='thin', color='E5E7EB'),
-        bottom=Side(style='thin', color='E5E7EB')
-    )
-
-    start_row = 6
-    for idx, row in df.iterrows():
-        curr = start_row + idx
-        ws.row_dimensions[curr].height = 20
-        ws.cell(row=curr, column=1, value=idx+1).alignment = Alignment(horizontal="center")
-        ws.cell(row=curr, column=2, value=str(row['Ingredient'])).alignment = Alignment(horizontal="left")
-        
-        c3 = ws.cell(row=curr, column=3, value=float(row['Quantity_KG']))
-        c3.number_format = '#,##0.00'
-        c3.alignment = Alignment(horizontal="right")
-        
-        c4 = ws.cell(row=curr, column=4, value=float(row['Rate_Per_KG']))
-        c4.number_format = '₹#,##0.00'
-        c4.alignment = Alignment(horizontal="right")
-        
-        c5 = ws.cell(row=curr, column=5, value=f"=C{curr}*D{curr}")
-        c5.number_format = '₹#,##0.00'
-        c5.alignment = Alignment(horizontal="right")
-
-        bg_color = "F9FAFB" if idx % 2 == 1 else "FFFFFF"
-        for c_idx in range(1, 6):
-            ws.cell(row=curr, column=c_idx).border = thin_border
-            ws.cell(row=curr, column=c_idx).fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
-
-    tot_r = start_row + len(df)
-    ws.row_dimensions[tot_r].height = 22
-    ws.cell(row=tot_r, column=2, value="Subtotal (Raw Materials)").font = Font(name="Calibri", size=11, bold=True)
-    ws.cell(row=tot_r, column=3, value=f"=SUM(C{start_row}:C{tot_r-1})").font = Font(name="Calibri", size=11, bold=True)
-    ws.cell(row=tot_r, column=3).number_format = '#,##0.00'
-    ws.cell(row=tot_r, column=3).alignment = Alignment(horizontal="right")
+    # Styles
+    navy = "1E3A8A"
+    mid_b = "2563EB"
+    light_b = "DBEAFE"
+    border_c = "CBD5E1"
     
-    sub_amt = ws.cell(row=tot_r, column=5, value=f"=SUM(E{start_row}:E{tot_r-1})")
-    sub_amt.font = Font(name="Calibri", size=11, bold=True)
-    sub_amt.number_format = '₹#,##0.00'
-    sub_amt.alignment = Alignment(horizontal="right")
+    thin_border = Border(left=Side(style='thin', color=border_c), right=Side(style='thin', color=border_c), top=Side(style='thin', color=border_c), bottom=Side(style='thin', color=border_c))
+    double_bottom = Border(top=Side(style='thin', color=navy), bottom=Side(style='double', color=navy))
+    
+    # Title
+    ws.merge_cells("A1:N1")
+    ws["A1"] = "MASTER INVENTORY CLOSING & RECONCILIATION AUDIT REPORT"
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    ws["A1"].fill = PatternFill(start_color=navy, end_color=navy, fill_type="solid")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 34
 
-    sum_border = Border(top=Side(style='thin', color='1E3A8A'), bottom=Side(style='double', color='1E3A8A'))
-    for c_idx in range(1, 6):
-        ws.cell(row=tot_r, column=c_idx).border = sum_border
-        ws.cell(row=tot_r, column=c_idx).fill = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+    ws.merge_cells("A2:N2")
+    ws["A2"] = "Formula: Should-Be Closing = Opening + Issued - Consumed - Wastage | Variance = Physical - Should-Be | Financial = Variance * Unit Cost"
+    ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="FFFFFF")
+    ws["A2"].fill = PatternFill(start_color=mid_b, end_color=mid_b, fill_type="solid")
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 20
 
-    # Section 2 Header: Summary
-    sum_start = tot_r + 2
-    ws.merge_cells(f"A{sum_start}:E{sum_start}")
-    sec2 = ws[f"A{sum_start}"]
-    sec2.value = "2. YIELD LOSS, OVERHEADS & FINANCIAL SUMMARY"
-    sec2.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
-    sec2.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
-    ws.row_dimensions[sum_start].height = 24
-
-    metrics = [
-        ("Total Raw Material Batch Weight", f"=C{tot_r}", "KG", '#,##0.00'),
-        ("Process / Moisture Loss (%)", loss_pct / 100.0, "%", '0.0%'),
-        ("Final Net Yield Output", f"=E{sum_start+1}*(1-E{sum_start+2})", "KG", '#,##0.00'),
-        ("Raw Material Total Cost", f"=E{tot_r}", "INR", '₹#,##0.00'),
-        ("Labour & Fuel Overheads", float(labor_cost), "INR", '₹#,##0.00'),
-        ("Packaging & Box Cost", float(pack_cost), "INR", '₹#,##0.00'),
-        ("Total Batch Production Cost", f"=SUM(E{sum_start+4}:E{sum_start+6})", "INR", '₹#,##0.00'),
-        ("Final Cost Per KG (True Cost)", f"=E{sum_start+7}/E{sum_start+3}", "INR/KG", '₹#,##0.00'),
-        ("Target Profit Margin (%)", margin_pct / 100.0, "%", '0.0%'),
-        ("Suggested Selling Price Per KG", f"=E{sum_start+8}/(1-E{sum_start+9})", "INR/KG", '₹#,##0.00'),
-        ("Net Profit Per KG", f"=E{sum_start+10}-E{sum_start+8}", "INR/KG", '₹#,##0.00'),
+    headers = [
+        "Item Code", "Item Name", "Department", "UOM", "Unit Cost (₹)",
+        "Opening Stock", "Store Issued", "Sales / Consumed", "Wastage / Scrap",
+        "Should-Be Closing", "Physical Closing Qty", "Variance (Qty)", "Financial Impact (₹)"
     ]
+    
+    ws.row_dimensions[4].height = 26
+    for c_idx, h in enumerate(headers, 1):
+        c = ws.cell(row=4, column=c_idx, value=h)
+        c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color=navy, end_color=navy, fill_type="solid")
+        c.alignment = Alignment(horizontal="center", vertical="center")
 
-    for idx, (label, val, unit, num_fmt) in enumerate(metrics):
-        r = sum_start + 1 + idx
-        ws.row_dimensions[r].height = 21
-        ws.merge_cells(f"A{r}:C{r}")
-        ws[f"A{r}"] = label
-        ws[f"A{r}"].alignment = Alignment(horizontal="left", vertical="center")
+    start_r = 5
+    for idx, row in df_audit.iterrows():
+        r = start_r + idx
+        ws.row_dimensions[r].height = 20
+        code = str(row['Item_Code'])
+        info = ITEM_MASTER.get(code, {"name": "Unknown", "dept": "GENERAL", "uom": "PCS", "price": 0.0, "opening": 0.0})
+
+        ws.cell(row=r, column=1, value=code).alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=2, value=info["name"]).alignment = Alignment(horizontal="left")
+        ws.cell(row=r, column=3, value=info["dept"]).alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=4, value=info["uom"]).alignment = Alignment(horizontal="center")
         
-        ws[f"D{r}"] = unit
-        ws[f"D{r}"].alignment = Alignment(horizontal="center", vertical="center")
-        ws[f"D{r}"].font = Font(name="Calibri", size=10, color="6B7280")
-        
-        v = ws[f"E{r}"]
-        v.value = val
-        v.number_format = num_fmt
-        v.alignment = Alignment(horizontal="right", vertical="center")
+        c5 = ws.cell(row=r, column=5, value=info["price"])
+        c5.number_format = '₹#,##0.00'; c5.alignment = Alignment(horizontal="right")
 
-        is_high = label in ["Total Batch Production Cost", "Final Cost Per KG (True Cost)", "Suggested Selling Price Per KG", "Net Profit Per KG"]
-        fill_col = "FEF3C7" if ("Selling" in label or "Profit" in label) else ("E0F2FE" if is_high else "FFFFFF")
-        for c_idx in range(1, 6):
-            cell = ws.cell(row=r, column=c_idx)
-            cell.border = thin_border
-            cell.fill = PatternFill(start_color=fill_col, end_color=fill_col, fill_type="solid")
-            if is_high:
-                cell.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+        c6 = ws.cell(row=r, column=6, value=info["opening"])
+        c6.number_format = '#,##0.00'; c6.alignment = Alignment(horizontal="right")
 
-    ws.column_dimensions["A"].width = 8
-    ws.column_dimensions["B"].width = 30
+        c7 = ws.cell(row=r, column=7, value=float(row['Store_Issued']))
+        c7.number_format = '#,##0.00'; c7.alignment = Alignment(horizontal="right")
+
+        c8 = ws.cell(row=r, column=8, value=float(row['Sales_Consumed']))
+        c8.number_format = '#,##0.00'; c8.alignment = Alignment(horizontal="right")
+
+        c9 = ws.cell(row=r, column=9, value=float(row['Wastage']))
+        c9.number_format = '#,##0.00'; c9.alignment = Alignment(horizontal="right")
+
+        # Should-Be Closing = Opening + Issued - Consumed - Wastage -> =F{r}+G{r}-H{r}-I{r}
+        c10 = ws.cell(row=r, column=10, value=f"=F{r}+G{r}-H{r}-I{r}")
+        c10.number_format = '#,##0.00'; c10.alignment = Alignment(horizontal="right")
+
+        c11 = ws.cell(row=r, column=11, value=float(row['Physical_Closing']))
+        c11.number_format = '#,##0.00'; c11.alignment = Alignment(horizontal="right")
+
+        # Variance = Physical - Should-Be -> =K{r}-J{r}
+        c12 = ws.cell(row=r, column=12, value=f"=K{r}-J{r}")
+        c12.number_format = '#,##0.00'; c12.alignment = Alignment(horizontal="right")
+        c12.font = Font(name="Calibri", size=11, bold=True)
+
+        # Financial Impact = Variance * Unit Cost -> =L{r}*E{r}
+        c13 = ws.cell(row=r, column=13, value=f"=L{r}*E{r}")
+        c13.number_format = '₹#,##0.00'; c13.alignment = Alignment(horizontal="right")
+        c13.font = Font(name="Calibri", size=11, bold=True)
+
+        bg = "F8FAFC" if idx % 2 == 1 else "FFFFFF"
+        for col_i in range(1, 14):
+            c_cell = ws.cell(row=r, column=col_i)
+            c_cell.border = thin_border
+            c_cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
+
+    tot_r = start_r + len(df_audit)
+    ws.row_dimensions[tot_r].height = 24
+    ws.merge_cells(f"A{tot_r}:L{tot_r}")
+    ws[f"A{tot_r}"] = "TOTAL NET FINANCIAL VARIANCE (₹)"
+    ws[f"A{tot_r}"].font = Font(name="Calibri", size=11, bold=True)
+    ws[f"A{tot_r}"].alignment = Alignment(horizontal="right", vertical="center")
+
+    tot_fi = ws.cell(row=tot_r, column=13, value=f"=SUM(M{start_r}:M{tot_r-1})")
+    tot_fi.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+    tot_fi.number_format = '₹#,##0.00'
+    tot_fi.alignment = Alignment(horizontal="right", vertical="center")
+
+    for col_i in range(1, 14):
+        c_cell = ws.cell(row=tot_r, column=col_i)
+        c_cell.border = double_bottom
+        c_cell.fill = PatternFill(start_color=light_b, end_color=light_b, fill_type="solid")
+
+    ws.column_dimensions["A"].width = 16
+    ws.column_dimensions["B"].width = 34
     ws.column_dimensions["C"].width = 16
-    ws.column_dimensions["D"].width = 18
-    ws.column_dimensions["E"].width = 22
+    ws.column_dimensions["D"].width = 10
+    for col_l in ["E", "F", "G", "H", "I", "J", "K", "L"]:
+        ws.column_dimensions[col_l].width = 16
+    ws.column_dimensions["M"].width = 22
 
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
 
-# ----------------- UI TABS -----------------
-tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Consultant"])
+# ----------------- UI INTERFACE -----------------
+st.title("🏭 Bakery, Cafe, Sweets & Savoury Inventory & Closing Audit")
+st.caption("100% Item-Code Driven Stock Reconciliation, Closing & Variance System")
 
-with tab1:
-    st.caption("Precise cost, batch yield, and margin analysis for commercial kitchens, confectioneries, and bakeries.")
+tab_closing, tab_master, tab_ai = st.tabs([
+    "📦 Daily Closing & Stock Reconciliation",
+    "📋 Item Code Master Directory",
+    "🤖 AI Consultant"
+])
+
+with tab_closing:
+    st.subheader("1. Item-Code Driven Closing Audit Table")
+    st.caption("Table mein sirf Item Code select karein — Description, Department, UOM, Unit Cost aur Opening Stock apne aap set ho jayenge:")
+
+    edited_audit = st.data_editor(
+        st.session_state.audit_items,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "Item_Code": st.column_config.SelectboxColumn("Item Code", options=CODE_OPTIONS, required=True),
+            "Store_Issued": st.column_config.NumberColumn("Store Issued", min_value=0.0, format="%.2f"),
+            "Sales_Consumed": st.column_config.NumberColumn("Sales / Consumed", min_value=0.0, format="%.2f"),
+            "Wastage": st.column_config.NumberColumn("Wastage / Scrap", min_value=0.0, format="%.2f"),
+            "Physical_Closing": st.column_config.NumberColumn("Physical Closing", min_value=0.0, format="%.2f"),
+        }
+    )
+
+    # Clean data & live preview
+    clean_audit = edited_audit.dropna(subset=['Item_Code']).copy()
+    clean_audit['Item_Name'] = clean_audit['Item_Code'].map(lambda c: ITEM_MASTER.get(c, {}).get('name', ''))
+    clean_audit['Department'] = clean_audit['Item_Code'].map(lambda c: ITEM_MASTER.get(c, {}).get('dept', ''))
+    clean_audit['Unit_Cost'] = clean_audit['Item_Code'].map(lambda c: ITEM_MASTER.get(c, {}).get('price', 0.0))
+    clean_audit['Opening_Stock'] = clean_audit['Item_Code'].map(lambda c: ITEM_MASTER.get(c, {}).get('opening', 0.0))
     
-    col_left, col_right = st.columns([1.1, 0.9], gap="large")
+    clean_audit['Should_Be_Closing'] = clean_audit['Opening_Stock'] + clean_audit['Store_Issued'] - clean_audit['Sales_Consumed'] - clean_audit['Wastage']
+    clean_audit['Variance_Qty'] = clean_audit['Physical_Closing'] - clean_audit['Should_Be_Closing']
+    clean_audit['Financial_Impact'] = clean_audit['Variance_Qty'] * clean_audit['Unit_Cost']
 
-    with col_left:
-        st.subheader("1. Batch & Product Details")
-        recipe_name = st.text_input("Product / Recipe Name", value="Premium Kaju Katli")
+    st.markdown("### 🔍 Live Reconciliation & Variance Preview")
+    st.dataframe(
+        clean_audit[['Item_Code', 'Item_Name', 'Department', 'Opening_Stock', 'Store_Issued', 'Sales_Consumed', 'Wastage', 'Should_Be_Closing', 'Physical_Closing', 'Variance_Qty', 'Financial_Impact']],
+        use_container_width=True
+    )
 
-        st.markdown("**Ingredients & Raw Material Rates:**")
-        st.caption("Click directly inside any cell to edit ingredient names, weight (KG), and rate per KG:")
-        
-        edited_df = st.data_editor(
-            st.session_state.ingredients,
-            num_rows="dynamic",
-            use_container_width=True,
-            column_config={
-                "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
-                "Quantity_KG": st.column_config.NumberColumn("Quantity (KG)", min_value=0.001, format="%.3f"),
-                "Rate_Per_KG": st.column_config.NumberColumn("Rate / KG (₹)", min_value=0.0, format="₹%.2f"),
-            }
-        )
+    st.markdown("---")
+    excel_bytes = generate_closing_audit_excel(clean_audit)
+    st.download_button(
+        label="📥 Download Professional Closing Audit Report (.xlsx)",
+        data=excel_bytes,
+        file_name=f"Inventory_Closing_Audit_{datetime.date.today()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
 
-        st.subheader("2. Yield Loss & Overheads")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            loss_percent = st.number_input("Cooking / Moisture Loss (%)", min_value=0.0, max_value=90.0, value=12.0, step=0.5)
-        with c2:
-            labor_gas_cost = st.number_input("Labor + Fuel Cost (₹)", min_value=0.0, value=400.0, step=50.0)
-        with c3:
-            packaging_cost = st.number_input("Packaging Cost (₹)", min_value=0.0, value=250.0, step=50.0)
+with tab_master:
+    st.subheader("📋 Master Directory (All Department Codes & Rates)")
+    master_df = pd.DataFrame([
+        {"Item Code": k, "Item Name": v["name"], "Department": v["dept"], "UOM": v["uom"], "Unit Cost (₹)": v["price"], "Opening Stock": v["opening"]}
+        for k, v in ITEM_MASTER.items()
+    ])
+    st.dataframe(master_df, use_container_width=True)
 
-        target_margin = st.slider("Target Gross Margin (%)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
-
-    # ----------------- CALCULATIONS -----------------
-    clean_df = edited_df.dropna(subset=['Quantity_KG', 'Rate_Per_KG']).copy()
-    raw_material_weight = clean_df['Quantity_KG'].sum()
-    clean_df['Cost'] = clean_df['Quantity_KG'] * clean_df['Rate_Per_KG']
-    raw_material_cost = clean_df['Cost'].sum()
-
-    final_yield_kg = raw_material_weight * (1 - (loss_percent / 100.0))
-    total_batch_cost = raw_material_cost + labor_gas_cost + packaging_cost
-
-    cost_per_kg = (total_batch_cost / final_yield_kg) if final_yield_kg > 0 else 0.0
-    selling_price_per_kg = (cost_per_kg / (1 - (target_margin / 100.0))) if target_margin < 100 else 0.0
-    profit_per_kg = selling_price_per_kg - cost_per_kg
-
-    with col_right:
-        st.subheader("📋 Output & Cost Summary")
-        st.markdown(f"""
-        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
-            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
-            <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
-            <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
-            <span style="color:#DC2626; font-size:13px; font-weight:600;">↓ {loss_percent}% Process Loss</span>
-            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #E2E8F0;">
-            <div style="display: flex; justify-content: space-between;">
-                <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">Cost Per KG</p>
-                    <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
-                </div>
-                <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">Suggested Selling Price</p>
-                    <h3 style="margin:0; color:#16A34A;">₹{selling_price_per_kg:,.2f}</h3>
-                </div>
-            </div>
-            <p style="margin:12px 0 0 0; font-size:13px; color:#2563EB; font-weight:600;">
-                💡 Net Profit: ₹{profit_per_kg:,.2f} per KG ({target_margin}% Margin)
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Generate Professional Excel File
-        excel_file_bytes = generate_professional_excel(
-            recipe_name, clean_df, loss_percent, final_yield_kg,
-            raw_material_cost, labor_gas_cost, packaging_cost,
-            total_batch_cost, cost_per_kg, target_margin,
-            selling_price_per_kg, profit_per_kg
-        )
-
-        st.download_button(
-            label="📥 Download Professional Excel Report (.xlsx)",
-            data=excel_file_bytes,
-            file_name=f"{recipe_name.replace(' ', '_')}_Costing_Sheet.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
-with tab2:
-    st.subheader("🤖 AI Chef & Production Consultant")
-    st.caption("Ask questions about recipe optimization, shelf-life improvement, process loss reduction, or packaging tips.")
-    
-    api_key = st.text_input("Enter Gemini API Key", type="password")
-    user_query = st.text_area("Your Question", placeholder="e.g., How can I reduce moisture loss below 12% in cashew fudge? Or how do I extend shelf-life without chemical preservatives?")
-    
-    if st.button("Ask AI Consultant", type="primary"):
-        if not api_key:
-            st.warning("Please enter your Gemini API Key first.")
-        elif not user_query:
-            st.warning("Please type a question.")
+with tab_ai:
+    st.subheader("🤖 AI Inventory & Production Consultant")
+    api_key = st.text_input("Gemini API Key", type="password")
+    query = st.text_area("Your Question", placeholder="e.g., How to analyze bakery shortage variances?")
+    if st.button("Ask AI", type="primary"):
+        if not api_key or not query:
+            st.warning("Please enter API Key and Query.")
         else:
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
-                prompt = f"""
-                You are an expert commercial food technologist, chef, and bakery production consultant.
-                Current Product: {recipe_name}
-                Raw Material Batch Weight: {raw_material_weight:.2f} kg
-                Process Loss: {loss_percent}%
-                Final Output Yield: {final_yield_kg:.2f} kg
-                Cost Per KG: ₹{cost_per_kg:.2f}
-
-                User Query: {user_query}
-                Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
-                """
-                with st.spinner("AI is analyzing your recipe..."):
-                    response = model.generate_content(prompt)
-                    st.success("Consultant Recommendation:")
-                    st.write(response.text)
+                res = model.generate_content(f"You are a commercial ERP and factory production expert.\nQuestion: {query}")
+                st.success("Advice:")
+                st.write(res.text)
             except Exception as e:
                 st.error(f"Error: {e}")
