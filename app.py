@@ -4,7 +4,7 @@ import json
 import base64
 import time
 
-# पेज सेटअप
+# पेज सेटअप - मोबाइल स्क्रीन के लिए बेहतर लेआउट
 st.set_page_config(
     page_title="Navo Super Fast AI | Dhirendra Mishra",
     page_icon="⚡",
@@ -12,78 +12,58 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# मोबाइल-परफेक्ट कॉम्पैक्ट CSS
+# मोबाइल-फ्रेंडली CSS स्टाइलिंग
 st.markdown("""
 <style>
-    /* मोबाइल स्क्रीन के लिए टॉप पैडिंग कम करना */
-    .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 5rem !important;
-        padding-left: 0.8rem !important;
-        padding-right: 0.8rem !important;
+    /* हेडर टेक्स्ट साइज - मोबाइल और लैपटॉप दोनों के लिए */
+    .main-title {
+        font-size: clamp(1.6rem, 5vw, 2.4rem);
+        font-weight: 700;
+        color: #2563eb;
+        line-height: 1.2;
+        margin-bottom: 4px;
     }
-
-    /* सिंगल-लाइन कॉम्पैक्ट हेडर कार्ड */
-    .header-card {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 12px 14px;
+    .sub-title {
+        font-size: clamp(0.85rem, 3vw, 1.05rem);
+        color: #64748b;
+        margin-top: 2px;
         margin-bottom: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-    }
-    
-    .title-row {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        justify-content: space-between;
         gap: 8px;
     }
-
-    .main-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #1d4ed8;
-        margin: 0;
-        white-space: nowrap;
-    }
-
-    .author-badge {
-        background-color: #0f172a;
+    .author-tag {
+        background-color: #1e293b;
         color: #38bdf8;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .sub-title {
+        padding: 3px 10px;
+        border-radius: 10px;
         font-size: 0.78rem;
-        color: #64748b;
-        margin-top: 3px;
+        font-weight: 600;
+        display: inline-block;
     }
 
-    /* चैट बबल्स को थोड़ा कॉम्पैक्ट बनाना */
+    /* मोबाइल पर चैट पैडिंग सही करना */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 4rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    /* मैसेज बॉक्स का फॉन्ट और साइज */
     [data-testid="stChatMessage"] {
-        padding: 10px 12px !important;
-        margin-bottom: 8px !important;
-        border-radius: 10px !important;
-        font-size: 0.95rem !important;
+        padding: 12px 14px !important;
+        margin-bottom: 10px !important;
+        border-radius: 12px !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# मोबाइल-ऑप्टिमाइज़्ड हेडर
-st.markdown("""
-<div class="header-card">
-    <div class="title-row">
-        <div class="main-title">⚡ Navo Super Fast AI</div>
-        <div class="author-badge">By Dhirendra Mishra</div>
-    </div>
-    <div class="sub-title">High-Performance Intelligent Assistant</div>
-</div>
-""", unsafe_allow_html=True)
+# हेडर सेक्शन
+st.markdown('<div class="main-title">⚡ Navo Super Fast AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title"><span>High-Performance Assistant</span><span class="author-tag">By Dhirendra Mishra</span></div>', unsafe_allow_html=True)
+st.divider()
 
 API_KEY = "AQ.Ab8RN6I8IV-N4P4uqzuUsH1VD1IrxnjhzARZZZLlMdg1-G4ixA"
 
