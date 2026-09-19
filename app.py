@@ -1,24 +1,26 @@
 import streamlit as st
 import google.generativeai as genai
+import os
 
 st.set_page_config(page_title="Fast AI Assistant", page_icon="⚡", layout="centered")
 
 st.title("⚡ Fast AI Assistant & Search")
 st.caption("High-Performance Assistant | Direct Access Mode")
 
+# Load API Key securely from Streamlit secrets or environment variables
+api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+
 user_prompt = st.text_area("✍️ Apana sawal ya search query yahan likhein:")
 
 if st.button("🚀 Run Fast AI", type="primary"):
-    if not user_prompt:
+    if not api_key:
+        st.error("⚠️ Error: Gemini API Key configure nahi hai! Kripya Streamlit Cloud ke 'Secrets' mein GEMINI_API_KEY jodein.")
+    elif not user_prompt:
         st.warning("Kripya koi sawal ya prompt darj karein.")
     else:
         try:
-            # Automatic model selection to prevent 404 errors
-            model_name = "gemini-2.5-flash"
-            try:
-                model = genai.GenerativeModel(model_name)
-            except:
-                model = genai.GenerativeModel("gemini-1.5-flash")
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
             
             with st.spinner("AI is thinking... ⚡"):
                 response = model.generate_content(user_prompt)
