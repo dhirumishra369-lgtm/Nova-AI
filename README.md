@@ -1,17 +1,26 @@
-# ⚡ Navo Super Fast AI
+import streamlit as st
+import google.generativeai as genai
 
-A high-performance, intelligent AI assistant built with Streamlit and powered by Google's Gemini backend.
+st.set_page_config(page_title="Fast AI Assistant", page_icon="⚡", layout="centered")
 
-## 🌟 Features
-- **Ultra Fast Response**: Powered by the Gemini engine.
-- **Multimodal Support**: Attach and analyze images (PNG, JPG) and PDF documents.
-- **Responsive UI**: Optimized for both desktop and mobile screens.
-- **Chat Management**: Real-time conversation tracking with clear session controls.
+st.title("⚡ Fast AI Assistant & Search")
+st.caption("High-Performance Assistant | Direct Access Mode")
 
-## 🛠️ Tech Stack
-- **Frontend / Framework**: Streamlit
-- **Backend / AI Engine**: Google Generative Language API
-- **Language**: Python
+# User Query / Search Box (No Password, No API Key Required)
+user_prompt = st.text_area("✍️ Apana sawal ya search query yahan likhein:")
 
----
-**Created by Dhirendra Mishra**
+if st.button("🚀 Run Fast AI", type="primary"):
+    if not user_prompt:
+        st.warning("Kripya koi sawal ya prompt darj karein.")
+    else:
+        try:
+            # Direct response without manual key entry
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            
+            with st.spinner("AI is thinking... ⚡"):
+                response = model.generate_content(user_prompt)
+                
+            st.success("✅ Result:")
+            st.write(response.text)
+        except Exception as e:
+            st.error(f"Error: {e}. (Kripya sunishchit karein ki environment mein valid key set ho.)")
