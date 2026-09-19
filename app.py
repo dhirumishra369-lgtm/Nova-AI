@@ -19,8 +19,9 @@ if st.button("🚀 Run Fast AI", type="primary"):
     else:
         try:
             genai.configure(api_key=api_key)
-            # Updated model name to resolve the 404 error
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            
+            # Using the standard stable model endpoint
+            model = genai.GenerativeModel("gemini-1.5-flash")
             
             with st.spinner("AI is thinking... ⚡"):
                 response = model.generate_content(user_prompt)
@@ -28,4 +29,5 @@ if st.button("🚀 Run Fast AI", type="primary"):
             st.success("✅ Result:")
             st.write(response.text)
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error aaya: {e}")
+            st.info("💡 Sujhav: Kripya sunishchit karein ki aapne Google AI Studio (`aistudio.google.com`) se bilkul nayi aur sahi API Key copy karke yahan daali hai.")
