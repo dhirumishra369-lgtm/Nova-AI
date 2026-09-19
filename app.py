@@ -6,13 +6,13 @@ st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", l
 st.title("⚡ Nova-AI: Recipe Costing, Yield & Production Assistant")
 st.caption("Commercial Kitchen, Confectionery & Bakery Manufacturing Intelligence")
 
-# Sidebar for secure API key configuration (so it never throws errors)
+# Sidebar for secure API key configuration
 with st.sidebar:
     st.subheader("🔐 Configuration")
     api_key_input = st.text_input("Gemini API Key:", type="password", value="")
     st.info("💡 Google AI Studio se prapt apni API Key yahan darj karein.")
 
-# Main Layout
+# Main Layout with Tabs
 tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Assistant"])
 
 with tab1:
