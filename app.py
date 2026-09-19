@@ -39,7 +39,7 @@ if not check_password():
     st.stop()
 
 st.title("🏭 Bakery, Cafe, Sweets & Savoury ERP System")
-st.caption("Secure Inventory Closing (20 Rows Ready), Recipe Yield Calculator & AI Consultant")
+st.caption("Secure Inventory Closing (20 Rows), High-Demand Recipe Yield Calculator & AI Consultant")
 
 # ----------------- BUILT-IN MASTER & 20 ROWS INITIALIZATION -----------------
 BUILT_IN_MASTER = {
@@ -53,7 +53,6 @@ BUILT_IN_MASTER = {
 CODE_OPTIONS = list(BUILT_IN_MASTER.keys())
 default_code = CODE_OPTIONS[0] if CODE_OPTIONS else "ITEM1"
 
-# Automatically initializing exactly 20 rows for the audit table
 if "demo_audit_items" not in st.session_state:
     initial_rows = []
     for _ in range(20):
@@ -66,9 +65,14 @@ if "demo_audit_items" not in st.session_state:
         })
     st.session_state.demo_audit_items = pd.DataFrame(initial_rows)
 
+# Pre-loaded High-Demand Recipes for Bakery, Cafe & Sweets
 if "custom_recipes" not in st.session_state:
     st.session_state.custom_recipes = {
-        "Meva Besan Laddu": {"Besan": 1.0, "Sugar": 1.0, "Ghee": 1.0}
+        "Meva Besan Laddu": {"Besan": 1.0, "Sugar": 1.0, "Ghee": 1.0},
+        "Chocolate Truffle Celebration Cake": {"Dark Chocolate": 0.4, "Fresh Cream": 0.3, "Maida": 0.2, "Butter": 0.1},
+        "Kaju Katli": {"Cashew Splits": 0.7, "Sugar": 0.3, "Ghee": 0.05},
+        "Veg Cheese Sandwich": {"Bread Loaf": 0.5, "Paneer/Veggie Mix": 0.3, "Cheese Slice": 0.2, "Butter": 0.05},
+        "Tutti Frutti Dry Cake": {"Maida": 0.4, "Sugar": 0.25, "Butter/Oil": 0.2, "Tutti Frutti & Eggs": 0.15}
     }
 
 # ----------------- EXCEL EXPORT FUNCTION (FIRST SHEET) -----------------
@@ -175,14 +179,14 @@ def generate_closing_audit_excel(df_audit):
 
 # ----------------- UI TABS -----------------
 tab_closing, tab_recipe, tab_ai = st.tabs([
-    "📦 Daily Closing & Stock Reconciliation (Sheet 1)",
-    "🍰 Recipe BOM & Production Yield Calculator (Sheet 2)",
+    "📦 Daily Closing & Stock Reconciliation (20 Rows)",
+    "🍰 High-Demand Recipe & Yield Calculator",
     "🤖 AI Assistant & Search"
 ])
 
 with tab_closing:
-    st.subheader("1. Daily Closing & Stock Reconciliation Table (20 Rows)")
-    st.caption("Aapke paas ab direct 20 rows available hain, aap values update kar sakte hain ya aur bhi jod sakte hain:")
+    st.subheader("1. Daily Closing & Stock Reconciliation Table (20 Rows Ready)")
+    st.caption("Aapke paas 20 rows ready hain. Values update karein aur report download karein:")
 
     edited_audit = st.data_editor(
         st.session_state.demo_audit_items,
@@ -224,11 +228,11 @@ with tab_closing:
     )
 
 with tab_recipe:
-    st.subheader("2. Recipe BOM & Production Yield Calculator")
-    st.caption("Meva Besan Laddu ya apni koi bhi nayi recipe chun kar target production ke anusار raw material requirement nikalein:")
+    st.subheader("2. High-Demand Recipe & Yield Calculator")
+    st.caption("Select any popular Bakery, Sweets or Cafe item to calculate exact raw material requirements:")
 
     recipe_names = list(st.session_state.custom_recipes.keys())
-    selected_recipe = st.selectbox("Select Recipe", recipe_names)
+    selected_recipe = st.selectbox("Select High-Demand Recipe", recipe_names)
 
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
@@ -239,16 +243,16 @@ with tab_recipe:
     with col3:
         st.write("")
         st.write("")
-        add_new_recipe_expander = st.expander("➕ Add New Custom Recipe")
+        add_new_recipe_expander = st.expander("➕ Add Custom Recipe")
 
     with add_new_recipe_expander:
-        new_rec_name = st.text_input("New Recipe Name (e.g. Sooji Halwa)")
-        new_item1 = st.text_input("Ingredient 1 Name", value="Sooji")
-        new_qty1 = st.number_input("Ingredient 1 Qty (kg per batch)", value=1.0)
-        new_item2 = st.text_input("Ingredient 2 Name", value="Sugar")
-        new_qty2 = st.number_input("Ingredient 2 Qty (kg per batch)", value=1.0)
-        new_item3 = st.text_input("Ingredient 3 Name", value="Ghee")
-        new_qty3 = st.number_input("Ingredient 3 Qty (kg per batch)", value=1.0)
+        new_rec_name = st.text_input("New Recipe Name")
+        new_item1 = st.text_input("Ingredient 1 Name", value="Item 1")
+        new_qty1 = st.number_input("Ingredient 1 Qty", value=1.0)
+        new_item2 = st.text_input("Ingredient 2 Name", value="Item 2")
+        new_qty2 = st.number_input("Ingredient 2 Qty", value=1.0)
+        new_item3 = st.text_input("Ingredient 3 Name", value="Item 3")
+        new_qty3 = st.number_input("Ingredient 3 Qty", value=1.0)
         
         if st.button("Save New Recipe"):
             if new_rec_name:
@@ -257,7 +261,7 @@ with tab_recipe:
                     new_item2: new_qty2,
                     new_item3: new_qty3
                 }
-                st.success(f"Recipe '{new_rec_name}' added successfully! Please re-select it from dropdown.")
+                st.success(f"Recipe '{new_rec_name}' added successfully! Please re-select from dropdown.")
                 st.rerun()
 
     current_recipe_ingredients = st.session_state.custom_recipes[selected_recipe]
@@ -284,7 +288,7 @@ with tab_recipe:
 
 with tab_ai:
     st.subheader("🤖 AI Assistant & Business Search")
-    st.caption("Aap apne inventory, recipes, ya business optimization se जुड़ा कोई भी सवाल पूछ सकते हैं:")
+    st.caption("Aap apne inventory, recipes, ya business optimization se juda koi bhi sawal pooch sakte hain:")
     
     ai_api_key = st.text_input("Enter Gemini API Key", type="password")
     user_query = st.text_area("Ask AI anything about bakery operations, costing, or inventory:")
