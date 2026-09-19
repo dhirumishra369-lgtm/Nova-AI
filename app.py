@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 
 st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", layout="wide")
 
@@ -39,14 +39,11 @@ with tab2:
             st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
         else:
             try:
-                # Using the modern Google GenAI client
-                client = genai.Client(api_key=st.session_state.api_key)
+                genai.configure(api_key=st.session_state.api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
                 
                 with st.spinner("AI Chef is analyzing... ⚡"):
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=user_prompt,
-                    )
+                    response = model.generate_content(user_prompt)
                     
                 st.success("✅ AI Result:")
                 st.write(response.text)
