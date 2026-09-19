@@ -6,8 +6,16 @@ st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", l
 st.title("⚡ Nova-AI: Recipe Costing, Yield & Production Assistant")
 st.caption("Commercial Kitchen, Confectionery & Bakery Manufacturing Intelligence")
 
-# Direct inputs right on the main screen
-api_key_input = st.text_input("🔑 Yahan apni Gemini API Key darj karein:", type="password", value="")
+# Initialize Session State for API Key so it never gets lost on click
+if "api_key" not in st.session_state:
+    st.session_state.api_key = ""
+
+# API Key input linked with session state
+st.session_state.api_key = st.text_input(
+    "🔑 Yahan apni Gemini API Key darj karein:", 
+    type="password", 
+    value=st.session_state.api_key
+)
 
 tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Assistant"])
 
@@ -26,13 +34,13 @@ with tab2:
     user_prompt = st.text_area("✍️ Apana sawal, recipe ya production query yahan likhein:")
 
     if st.button("🚀 Run AI Analysis", type="primary"):
-        if not api_key_input:
+        if not st.session_state.api_key:
             st.warning("⚠️ Kripya sabse upar diye gaye box mein apni Gemini API Key darj karein.")
         elif not user_prompt:
             st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
         else:
             try:
-                genai.configure(api_key=api_key_input)
+                genai.configure(api_key=st.session_state.api_key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
                 
                 with st.spinner("AI Chef is analyzing... ⚡"):
