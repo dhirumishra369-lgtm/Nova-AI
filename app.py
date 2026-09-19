@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
 st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", layout="wide")
 
@@ -39,16 +39,16 @@ with tab2:
             st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
         else:
             try:
-                # Configuring client directly
-                genai.configure(api_key=st.session_state.api_key)
-                
-                # Using the standard gemini-1.5-flash client call
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # Using the modern Google GenAI client
+                client = genai.Client(api_key=st.session_state.api_key)
                 
                 with st.spinner("AI Chef is analyzing... ⚡"):
-                    response = model.generate_content(user_prompt)
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=user_prompt,
+                    )
                     
                 st.success("✅ AI Result:")
                 st.write(response.text)
             except Exception as e:
-                st.error(f"Error 400/API Details: {e}")
+                st.error(f"Error: {e}")
