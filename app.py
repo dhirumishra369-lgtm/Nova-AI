@@ -6,13 +6,9 @@ st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", l
 st.title("⚡ Nova-AI: Recipe Costing, Yield & Production Assistant")
 st.caption("Commercial Kitchen, Confectionery & Bakery Manufacturing Intelligence")
 
-# Sidebar for secure API key configuration
-with st.sidebar:
-    st.subheader("🔐 Configuration")
-    api_key_input = st.text_input("Gemini API Key:", type="password", value="")
-    st.info("💡 Google AI Studio se prapt apni API Key yahan darj karein.")
+# Direct inputs right on the main screen
+api_key_input = st.text_input("🔑 Yahan apni Gemini API Key darj karein:", type="password", value="")
 
-# Main Layout with Tabs
 tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Assistant"])
 
 with tab1:
@@ -24,10 +20,6 @@ with tab1:
         loss_pct = st.number_input("Cooking / Moisture Loss (%)", value=12.0)
     with col2:
         target_margin = st.number_input("Target Gross Margin (%)", value=35.0)
-        
-    st.markdown("---")
-    st.subheader("📋 Output & Cost Summary Preview")
-    st.info("Aapka costing data yahan surakshit roop se calculate ho raha hai.")
 
 with tab2:
     st.subheader("🤖 AI Production Consultant & Search")
@@ -35,7 +27,7 @@ with tab2:
 
     if st.button("🚀 Run AI Analysis", type="primary"):
         if not api_key_input:
-            st.warning("⚠️ Kripya pehle sidebar mein apni Gemini API Key darj karein.")
+            st.warning("⚠️ Kripya sabse upar diye gaye box mein apni Gemini API Key darj karein.")
         elif not user_prompt:
             st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
         else:
