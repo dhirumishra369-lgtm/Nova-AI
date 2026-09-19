@@ -6,7 +6,7 @@ st.set_page_config(page_title="Fast AI Assistant", page_icon="⚡", layout="cent
 st.title("⚡ Fast AI Assistant & Search")
 st.caption("High-Performance Assistant | Direct Access Mode")
 
-# Simple API Key input field inside the app
+# API Key input box
 api_key = st.text_input("🔑 Gemini API Key darj karein:", type="password")
 
 user_prompt = st.text_area("✍️ Apana sawal ya search query yahan likhein:")
@@ -19,7 +19,8 @@ if st.button("🚀 Run Fast AI", type="primary"):
     else:
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # Updated model name to resolve the 404 error
+            model = genai.GenerativeModel("gemini-2.5-flash")
             
             with st.spinner("AI is thinking... ⚡"):
                 response = model.generate_content(user_prompt)
