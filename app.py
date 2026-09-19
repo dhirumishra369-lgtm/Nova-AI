@@ -13,8 +13,12 @@ if st.button("🚀 Run Fast AI", type="primary"):
         st.warning("Kripya koi sawal ya prompt darj karein.")
     else:
         try:
-            # Updated model name to resolve the 404 error
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            # Automatic model selection to prevent 404 errors
+            model_name = "gemini-2.5-flash"
+            try:
+                model = genai.GenerativeModel(model_name)
+            except:
+                model = genai.GenerativeModel("gemini-1.5-flash")
             
             with st.spinner("AI is thinking... ⚡"):
                 response = model.generate_content(user_prompt)
