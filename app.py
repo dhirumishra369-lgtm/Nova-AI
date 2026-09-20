@@ -124,15 +124,16 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     metrics = [
         ("Total Raw Material Batch Weight", f"=C{tot_r}", "KG", '#,##0.00'),
         ("Process / Moisture Loss (%)", loss_pct / 100.0, "%", '0.0%'),
-        ("Final Net Yield Output", f"=E{sum_start+1}*(1-E{sum_start+2})", "KG", '#,##0.00'),
+        ("Yield Loss Quantity (Wastage/Evaporation)", f"=E{sum_start+1}*E{sum_start+2}", "KG", '#,##0.00'),
+        ("Final Net Yield Output", f"=E{sum_start+1}-E{sum_start+3}", "KG", '#,##0.00'),
         ("Raw Material Total Cost", f"=E{tot_r}", "INR", '₹#,##0.00'),
         ("Labour & Fuel Overheads", float(labor_cost), "INR", '₹#,##0.00'),
         ("Packaging & Box Cost", float(pack_cost), "INR", '₹#,##0.00'),
-        ("Total Batch Production Cost", f"=SUM(E{sum_start+4}:E{sum_start+6})", "INR", '₹#,##0.00'),
-        ("Final Cost Per KG (True Cost)", f"=E{sum_start+7}/E{sum_start+3}", "INR/KG", '₹#,##0.00'),
+        ("Total Batch Production Cost", f"=SUM(E{sum_start+5}:E{sum_start+7})", "INR", '₹#,##0.00'),
+        ("Final Cost Per KG (True Cost)", f"=E{sum_start+8}/E{sum_start+4}", "INR/KG", '₹#,##0.00'),
         ("Target Profit Margin (%)", margin_pct / 100.0, "%", '0.0%'),
-        ("Suggested Selling Price Per KG", f"=E{sum_start+8}/(1-E{sum_start+9})", "INR/KG", '₹#,##0.00'),
-        ("Net Profit Per KG", f"=E{sum_start+10}-E{sum_start+8}", "INR/KG", '₹#,##0.00'),
+        ("Suggested Selling Price Per KG", f"=E{sum_start+9}/(1-E{sum_start+10})", "INR/KG", '₹#,##0.00'),
+        ("Net Profit Per KG", f"=E{sum_start+11}-E{sum_start+9}", "INR/KG", '₹#,##0.00'),
     ]
 
     for idx, (label, val, unit, num_fmt) in enumerate(metrics):
@@ -213,7 +214,8 @@ with tab1:
     clean_df['Cost'] = clean_df['Quantity_KG'] * clean_df['Rate_Per_KG']
     raw_material_cost = clean_df['Cost'].sum()
 
-    final_yield_kg = raw_material_weight * (1 - (loss_percent / 100.0))
+    yield_loss_kg = raw_material_weight * (loss_percent / 100.0)
+    final_yield_kg = raw_material_weight - yield_loss_kg
     total_batch_cost = raw_material_cost + labor_gas_cost + packaging_cost
 
     cost_per_kg = (total_batch_cost / final_yield_kg) if final_yield_kg > 0 else 0.0
@@ -221,18 +223,30 @@ with tab1:
     profit_per_kg = selling_price_per_kg - cost_per_kg
 
     with col_right:
-        st.subheader("📋 Output & Cost Summary")
+        st.subheader("📋 Output, Yield Loss & Cost Summary")
         st.markdown(f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <div>
+                    <p style="margin:0; font-size:13px; color:#64748B;">Total Input Weight</p>
+                    <h4 style="margin:0; color:#0F172A;">{raw_material_weight:,.2f} KG</h4>
+                </div>
+                <div>
+                    <p style="margin:0; font-size:13px; color:#DC2626;">📉 Yield Loss / Evaporation</p>
+                    <h4 style="margin:0; color:#DC2626;">{yield_loss_kg:,.2f} KG ({loss_percent}%)</h4>
+                </div>
+                <div>
+                    <p style="margin:0; font-size:13px; color:#16A34A;">✅ Final Net Yield</p>
+                    <h4 style="margin:0; color:#16A34A;">{final_yield_kg:,.2f} KG</h4>
+                </div>
+            </div>
+            <hr style="margin: 10px 0; border: 0; border-top: 1px solid #E2E8F0;">
             <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
-            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
-            <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
-            <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
-            <span style="color:#DC2626; font-size:13px; font-weight:600;">↓ {loss_percent}% Process Loss</span>
-            <hr style="margin: 15px 0; border: 0; border-top: 1px solid #E2E8F0;">
+            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:30px;">₹{total_batch_cost:,.2f}</h2>
+            
             <div style="display: flex; justify-content: space-between;">
                 <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">Cost Per KG</p>
+                    <p style="margin:0; font-size:13px; color:#64748B;">Cost Per KG (True Cost)</p>
                     <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
                 </div>
                 <div>
@@ -277,12 +291,12 @@ with tab2:
         else:
             try:
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 prompt = f"""
                 You are an expert commercial food technologist, chef, and bakery production consultant.
                 Current Product: {recipe_name}
                 Raw Material Batch Weight: {raw_material_weight:.2f} kg
-                Process Loss: {loss_percent}%
+                Process / Yield Loss: {loss_percent}% ({yield_loss_kg:.2f} kg lost)
                 Final Output Yield: {final_yield_kg:.2f} kg
                 Cost Per KG: ₹{cost_per_kg:.2f}
 
