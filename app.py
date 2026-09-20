@@ -1,51 +1,150 @@
 import streamlit as st
 import google.generativeai as genai
+import base64
+import time
 
-st.set_page_config(page_title="Nova-AI Production & Costing", page_icon="⚡", layout="wide")
+# पेज सेटअप
+st.set_page_config(
+    page_title="Navo Super Fast AI | Dhirendra Mishra",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-st.title("⚡ Nova-AI: Recipe Costing, Yield & Production Assistant")
-st.caption("Commercial Kitchen, Confectionery & Bakery Manufacturing Intelligence")
+# मोबाइल स्क्रीन अलाइनमेंट CSS
+st.markdown("""
+<style>
+    .block-container {
+        padding-top: 3.5rem !important;
+        padding-bottom: 5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    .header-card {
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+    }
+    .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+    .main-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .author-badge {
+        background-color: #0f172a;
+        color: #38bdf8;
+        padding: 3px 8px;
+        border-radius: 14px;
+        font-size: 0.70rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .sub-title {
+        font-size: 0.76rem;
+        color: #64748b;
+        margin-top: 4px;
+        margin-bottom: 0;
+    }
+    [data-testid="stChatMessage"] {
+        padding: 10px 12px !important;
+        margin-bottom: 8px !important;
+        border-radius: 10px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Initialize Session State for API Key
+# हेडर सेक्शन
+st.markdown("""
+<div class="header-card">
+    <div class="title-row">
+        <div class="main-title">⚡ Navo Super Fast AI</div>
+        <div class="author-badge">By Dhirendra Mishra</div>
+    </div>
+    <div class="sub-title">High-Performance Intelligent Assistant</div>
+</div>
+""", unsafe_allow_html=True)
+
+# Session State for API Key storage so it never gets lost
 if "api_key" not in st.session_state:
     st.session_state.api_key = ""
 
-st.session_state.api_key = st.text_input(
-    "🔑 Yahan apni Gemini API Key darj karein:", 
-    type="password", 
-    value=st.session_state.api_key
-)
-
-tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 AI Chef & Production Assistant"])
-
-with tab1:
-    st.subheader("1. Batch & Product Details")
-    recipe_name = st.text_input("Product / Recipe Name", "Special Bakery Item")
+# साइडबार
+with st.sidebar:
+    st.markdown("### ⚙️ Control Center")
+    st.success("🟢 **Navo Engine : Active**")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        loss_pct = st.number_input("Cooking / Moisture Loss (%)", value=12.0)
-    with col2:
-        target_margin = st.number_input("Target Gross Margin (%)", value=35.0)
+    st.markdown("---")
+    st.markdown("#### 🔑 API Key Setup")
+    st.session_state.api_key = st.text_input(
+        "Gemini API Key darj karein:", 
+        type="password", 
+        value=st.session_state.api_key
+    )
+    
+    st.markdown("---")
+    st.markdown("#### 📎 Attach File")
+    uploaded_file = st.file_uploader(
+        "Upload Image or PDF", 
+        type=["png", "jpg", "jpeg", "pdf"]
+    )
+    if uploaded_file:
+        st.success(f"Attached: {uploaded_file.name}")
+        
+    st.markdown("---")
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
-with tab2:
-    st.subheader("🤖 AI Production Consultant & Search")
-    user_prompt = st.text_area("✍️ Apana sawal, recipe ya production query yahan likhein:")
+# चैट हिस्ट्री
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    if st.button("🚀 Run AI Analysis", type="primary"):
-        if not st.session_state.api_key:
-            st.warning("⚠️ Kripya sabse upar diye gaye box mein apni Gemini API Key darj karein.")
-        elif not user_prompt:
-            st.warning("⚠️ Kripya koi sawal ya prompt darj karein.")
-        else:
+# मैसेज दिखाना
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# इनपुट बॉक्स
+if prompt := st.chat_input("Apna sawal yahan likhein..."):
+    if not st.session_state.api_key:
+        st.warning("⚠️ Kripya pehle Sidebar mein apni Gemini API Key darj karein!")
+    else:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        reply = ""
+        with st.spinner("Thinking... ⚡"):
             try:
                 genai.configure(api_key=st.session_state.api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
                 
-                with st.spinner("AI Chef is analyzing... ⚡"):
-                    response = model.generate_content(user_prompt)
-                    
-                st.success("✅ AI Result:")
-                st.write(response.text)
+                # Handling file attachment if provided
+                content_to_send = [prompt]
+                if uploaded_file is not None:
+                    file_bytes = uploaded_file.read()
+                    # For images or files handling with generativeai SDK
+                    content_to_send.append({
+                        "mime_type": uploaded_file.type,
+                        "data": file_bytes
+                    })
+
+                # Using stable gemini-1.5-flash model
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(content_to_send)
+                reply = response.text
             except Exception as e:
-                st.error(f"Error: {e}")
+                reply = f"Error: {e}"
+
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
