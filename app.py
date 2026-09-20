@@ -100,7 +100,7 @@ def get_navo_gemini_response(prompt):
     p = prompt.lower().strip()
     
     # 1. Image / Visual Request Detection
-    is_image_request = any(word in p for word in ["pic", "photo", "image", "bano", "banao", "draw", "generate", "design", "dikhao"])
+    is_image_request = any(word in p for word in ["pic", "photo", "image", "bano", "banao", "draw", "generate", "design", "dikhao", "ganesh", "shiv", "car", "lady"])
     
     if is_image_request:
         clean_query = p.replace("pic", "").replace("photo", "").replace("image", "").replace("bano", "").replace("banao", "").replace("dikhao", "").strip()
@@ -108,19 +108,18 @@ def get_navo_gemini_response(prompt):
             clean_query = p
         encoded_query = urllib.parse.quote(clean_query)
         img_url = f"https://source.unsplash.com/featured/600x400/?{encoded_query}"
-        reply_text = f"🎨 Aapki di gayi talash (**'{prompt}'**) ke anusaar yeh behtareen visual/image fetch kar di gayi hai:"
+        reply_text = f"🎨 Aapki di gayi talash ('{prompt}') ke anusaar yeh behtareen visual/image fetch kar di gayi hai:"
         return reply_text, img_url, clean_query.title()
     
     # 2. Identity / About Questions
     elif "kaun ho" in p or "tum kyon ho" in p or "who are you" in p:
-        reply = """Main **Navo Ultra Super Fast AI** hoon, jise **Dhirendra Mishra** dwara design kiya gaya hai. 
-Mera kaam aapki har tarah ki problem solve karna hai—chahe woh professional coding ho, bakery/confectionery management ho, ya instant image creation ho!"""
+        reply = "Main **Navo Ultra Super Fast AI** hoon, jise **Dhirendra Mishra** dwara design kiya gaya hai. Mera kaam aapki har tarah ki problem solve karna hai—chahe woh professional coding ho, bakery/confectionery management ho, ya instant image creation ho!"
         return reply, None, None
 
     # 3. Coding / Python Support
     elif "python" in p or "code" in p or "programming" in p:
-        reply = f"""### 💻 Python Code & Development Support
-Aapke sawal **'{prompt}'** ke liye yeh raha ek behtareen aur clean code template:
+        reply = """### 💻 Python Code & Development Support
+Aapke sawal ke liye yeh raha ek behtareen aur clean code template:
 
 ```python
 # Navo AI Lightning Script
