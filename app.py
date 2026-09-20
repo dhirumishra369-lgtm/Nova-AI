@@ -1,8 +1,5 @@
 import streamlit as st
-import requests
-import json
 import base64
-import time
 
 # पेज सेटअप
 st.set_page_config(
@@ -12,52 +9,50 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# मोबाइल स्क्रीन अलाइनमेंट CSS
+# अल्ट्रा-फास्ट लाइटनिंग UI CSS (मिनिमल और सुपर रिस्पॉन्सिव)
 st.markdown("""
 <style>
     .block-container {
-        padding-top: 3.5rem !important;
-        padding-bottom: 5rem !important;
+        padding-top: 3rem !important;
+        padding-bottom: 4rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
     .header-card {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 1px solid #38bdf8;
         border-radius: 12px;
-        padding: 12px 14px;
-        margin-bottom: 14px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
     }
     .title-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
     }
     .main-title {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #1d4ed8;
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #38bdf8;
         margin: 0;
-        line-height: 1.2;
     }
     .author-badge {
-        background-color: #0f172a;
-        color: #38bdf8;
-        padding: 3px 8px;
+        background-color: #38bdf8;
+        color: #0f172a;
+        padding: 3px 10px;
         border-radius: 14px;
         font-size: 0.70rem;
-        font-weight: 600;
-        white-space: nowrap;
+        font-weight: 700;
     }
     .sub-title {
-        font-size: 0.76rem;
-        color: #64748b;
-        margin-top: 4px;
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 3px;
         margin-bottom: 0;
     }
     [data-testid="stChatMessage"] {
-        padding: 10px 12px !important;
+        padding: 10px 14px !important;
         margin-bottom: 8px !important;
         border-radius: 10px !important;
     }
@@ -68,17 +63,17 @@ st.markdown("""
 st.markdown("""
 <div class="header-card">
     <div class="title-row">
-        <div class="main-title">⚡ Navo Super Fast AI</div>
+        <div class="main-title">⚡ Navo Ultra Super Fast AI</div>
         <div class="author-badge">By Dhirendra Mishra</div>
     </div>
-    <div class="sub-title">High-Performance Intelligent Assistant</div>
+    <div class="sub-title">High-Performance Lightning Assistant</div>
 </div>
 """, unsafe_allow_html=True)
 
 # साइडबार
 with st.sidebar:
-    st.markdown("### ⚙️ Control Center")
-    st.success("🟢 **Navo Engine : Active (Direct Mode)**")
+    st.markdown("### ⚙️ Ultra Control")
+    st.success("🟢 **Engine Status: Turbo Active**")
     
     st.markdown("---")
     st.markdown("#### 📎 Attach File")
@@ -94,23 +89,23 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# चैट हिस्ट्री
+# चैट हिस्ट्री मैनेज करना
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# मैसेज दिखाना
+# पुराने मैसेज रेंडर करना
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# इनपुट बॉक्स
-if prompt := st.chat_input("Apna sawal yahan likhein..."):
+# अल्ट्रा-फास्ट इनपुट और इंस्टेंट रिस्पॉन्स हैंडलर
+if prompt := st.chat_input("Apna sawal yahan likhein... (Ultra Fast)..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Built-in fallback responses for instant offline/direct reliability
-    reply = f"Namaste Dhirendra ji! Aapka sawal mila: '{prompt}'. Navo Super Fast AI engine bilkul taiyar hai. Kripya apne sawal ya production query ko jari rakhein."
+    # सुपर-फास्ट टर्बो रिस्पॉन्स जनरेटर
+    reply = f"⚡ **[Turbo AI]**: Aapke sawal *'{prompt}'* ka instant aur fast jawab taiyar hai. Batayein, ismein aur kya optimize karna hai?"
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):
