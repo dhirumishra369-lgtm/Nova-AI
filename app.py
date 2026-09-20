@@ -6,7 +6,7 @@ st.set_page_config(
     page_title="Navo Super Fast AI | Dhirendra Mishra",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"  # Sidebar khula rahega taaki key aasani se daal sakein
 )
 
 # --- LIGHTNING FAST UI CSS ---
@@ -68,7 +68,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### ⚙️ Gemini Cloud Config")
     
-    # Check if API key exists in Streamlit Secrets
+    # Check secrets first
     api_key = None
     try:
         if "GOOGLE_API_KEY" in st.secrets:
@@ -76,14 +76,13 @@ with st.sidebar:
     except Exception:
         pass
         
-    if api_key:
-        st.success("🟢 **Gemini API Connected via Secrets**")
+    # Manual key input in sidebar
+    manual_key = st.text_input("Enter Gemini API Key", type="password", value=api_key if api_key else "")
+    if manual_key:
+        api_key = manual_key
+        st.success("🟢 **API Key Active!**")
     else:
-        st.warning("⚠️ Secrets mein API Key nahi mili.")
-        # Fallback text input in sidebar if secrets is not configured
-        manual_key = st.text_input("Enter Google Gemini API Key", type="password")
-        if manual_key:
-            api_key = manual_key
+        st.warning("⚠️ Kripya yahan apni Gemini API Key paste karein.")
 
     st.markdown("---")
     st.markdown("#### 📎 Attach File / Image")
@@ -112,16 +111,14 @@ for msg in st.session_state.messages:
 # --- OFFICIAL GOOGLE GEMINI API ENGINE ---
 def call_real_gemini(prompt, uploaded_file):
     if not api_key:
-        return "⚠️ Kripya Streamlit Cloud ke **Secrets** mein apni `GOOGLE_API_KEY` set karein, ya sidebar mein key darj karein taaki yeh asli Gemini model se jud sake."
+        return "⚠️ Kripya sidebar mein apni **Google Gemini API Key** darj karein taaki yeh asli Gemini model se jud sake."
     
     try:
         genai.configure(api_key=api_key)
-        # Using Google's official fast model
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         contents = [prompt]
         
-        # If user uploaded a file/image, pass it to Gemini model natively!
         if uploaded_file is not None:
             bytes_data = uploaded_file.getvalue()
             contents.append({
