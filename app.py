@@ -242,21 +242,7 @@ with tab1:
             </div>
             <hr style="margin: 10px 0; border: 0; border-top: 1px solid #E2E8F0;">
             <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
-            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:30px;">₹{total_batch_cost:,.2f}</h2>
-            
-            <div style="display: flex; justify-content: space-between;">
-                <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">Cost Per KG (True Cost)</p>
-                    <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
-                </div>
-                <div>
-                    <p style="margin:0; font-size:13px; color:#64748B;">Suggested Selling Price</p>
-                    <h3 style="margin:0; color:#16A34A;">₹{selling_price_per_kg:,.2f}</h3>
-                </div>
-            </div>
-            <p style="margin:12px 0 0 0; font-size:13px; color:#2563EB; font-weight:600;">
-                💡 Net Profit: ₹{profit_per_kg:,.2f} per KG ({target_margin}% Margin)
-            </p>
+            <h2 style="margin:0; color:#0F172A; font-size:30px;">₹{total_batch_cost:,.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -298,7 +284,6 @@ with tab2:
                 Raw Material Batch Weight: {raw_material_weight:.2f} kg
                 Process / Yield Loss: {loss_percent}% ({yield_loss_kg:.2f} kg lost)
                 Final Output Yield: {final_yield_kg:.2f} kg
-                Cost Per KG: ₹{cost_per_kg:.2f}
 
                 User Query: {user_query}
                 Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
