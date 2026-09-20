@@ -65,6 +65,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- SIDEBAR CONFIGURATION ---
+# STREAM_CHUNK:Configuring sidebar inputs and file uploader...
 with st.sidebar:
     st.markdown("### ⚙️ Gemini API Configuration")
     
@@ -93,6 +94,7 @@ with st.sidebar:
         st.rerun()
 
 # --- CHAT STATE ---
+# STREAM_CHUNK:Initializing chat state...
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -101,12 +103,13 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # --- REAL GEMINI API CALL FUNCTION ---
+# STREAM_CHUNK:Defining Gemini API handler function...
 def ask_real_gemini(prompt_text, api_key, file_obj):
     if not api_key:
         return "⚠️ Kripya sidebar mein apni valid Google Gemini API Key darj karein taaki yeh seedhe Google Gemini se jud sake."
     
     try:
-        # Configure Gemini with the newly generated secure user-provided key
+        # Configure Gemini with the secure user-provided key
         genai.configure(api_key=api_key.strip())
         
         # Using gemini-2.5-flash for maximum support and reliability
@@ -129,6 +132,7 @@ def ask_real_gemini(prompt_text, api_key, file_obj):
         return f"⚠️ Connection Error: Kripya apni API Key check karein. Details: {str(err)}"
 
 # --- CHAT INPUT & HANDLER ---
+# STREAM_CHUNK:Handling chat inputs and responses...
 if prompt := st.chat_input("Google Gemini se kuch bhi puchiye..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
