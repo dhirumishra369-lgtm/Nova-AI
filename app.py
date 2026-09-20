@@ -1,4 +1,5 @@
 import streamlit as st
+import google.generativeai as genai
 import base64
 
 # पेज सेटअप
@@ -9,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# अल्ट्रा-फास्ट लाइटनिंग UI CSS (मिनिमल और सुपर रिस्पॉन्सिव)
+# अल्ट्रा-फास्ट UI CSS
 st.markdown("""
 <style>
     .block-container {
@@ -70,10 +71,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# साइडबार
+# साइडबार (यहाँ आप अपनी असली की डाल सकते हैं या डायरेक्ट मोड यूज़ कर सकते हैं)
 with st.sidebar:
     st.markdown("### ⚙️ Ultra Control")
     st.success("🟢 **Engine Status: Turbo Active**")
+    
+    st.markdown("---")
+    st.markdown("#### 🔑 API Key Setup")
+    user_api_key = st.text_input("Gemini API Key (Optional if hardcoded)", type="password")
     
     st.markdown("---")
     st.markdown("#### 📎 Attach File")
@@ -89,6 +94,10 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+# यहाँ अपनी असली काम करने वाली AIzaSy key डाल सकते हैं या साइडबार से ले सकते हैं
+# (फिलहाल हम यहाँ आपकी सुविधा के लिए सुरक्षित तरीका रख रहे हैं)
+DEFAULT_API_KEY = ""  # Agar aapke paas AIzaSy key hai toh yahan daal sakte hain
+
 # चैट हिस्ट्री मैनेज करना
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -98,14 +107,38 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# अल्ट्रा-फास्ट इनपुट और इंस्टेंट रिस्पॉन्स हैंडलर
-if prompt := st.chat_input("Apna sawal yahan likhein... (Ultra Fast)..."):
+# इनपुट और असली जेमिनी रिस्पॉन्स हैंडलर
+if prompt := st.chat_input("Apna sawal yahan likhein..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # सुपर-फास्ट टर्बो रिस्पॉन्स जनरेटर
-    reply = f"⚡ **[Turbo AI]**: Aapke sawal *'{prompt}'* ka instant aur fast jawab taiyar hai. Batayein, ismein aur kya optimize karna hai?"
+    reply = ""
+    with st.spinner("⚡ Thinking at Turbo Speed..."):
+        try:
+            # की सेट करना (साइडबार या डिफ़ॉल्ट से)
+            active_key = user_api_key if user_api_key else DEFAULT_API_KEY
+            
+            if not active_key:
+                # अगर की नहीं है, तो स्मार्ट फॉールबैक ताकि ऐप रुके नहीं
+                reply = f"Namaste! Aapne pucha: '{prompt}'। (Kripya poora jawab paane ke liye sidebar mein apni API key darj karein ya code mein set karein)."
+            else:
+                genai.configure(api_key=active_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                content_list = [prompt]
+                if uploaded_file is not None:
+                    file_bytes = uploaded_file.read()
+                    content_list.append({
+                        "mime_type": uploaded_file.type,
+                        "data": file_bytes
+                    })
+                
+                response = model.generate_content(content_list)
+                reply = response.text
+                
+        except Exception as e:
+            reply = f"Error: {e}"
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):
