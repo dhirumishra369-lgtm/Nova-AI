@@ -74,22 +74,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Session State for API Key storage so it never gets lost
-if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
+# Directly configuring your active API key here to prevent any invalid key errors
+API_KEY = "AIzaSy..."  # Yahan apni Google AI Studio wali poori key paste kar dein
 
 # साइडबार
 with st.sidebar:
     st.markdown("### ⚙️ Control Center")
     st.success("🟢 **Navo Engine : Active**")
-    
-    st.markdown("---")
-    st.markdown("#### 🔑 API Key Setup")
-    st.session_state.api_key = st.text_input(
-        "Gemini API Key darj karein:", 
-        type="password", 
-        value=st.session_state.api_key
-    )
     
     st.markdown("---")
     st.markdown("#### 📎 Attach File")
@@ -116,35 +107,29 @@ for msg in st.session_state.messages:
 
 # इनपुट बॉक्स
 if prompt := st.chat_input("Apna sawal yahan likhein..."):
-    if not st.session_state.api_key:
-        st.warning("⚠️ Kripya pehle Sidebar mein apni Gemini API Key darj karein!")
-    else:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-        reply = ""
-        with st.spinner("Thinking... ⚡"):
-            try:
-                genai.configure(api_key=st.session_state.api_key)
-                
-                # Handling file attachment if provided
-                content_to_send = [prompt]
-                if uploaded_file is not None:
-                    file_bytes = uploaded_file.read()
-                    # For images or files handling with generativeai SDK
-                    content_to_send.append({
-                        "mime_type": uploaded_file.type,
-                        "data": file_bytes
-                    })
+    reply = ""
+    with st.spinner("Thinking... ⚡"):
+        try:
+            genai.configure(api_key=API_KEY)
+            
+            content_to_send = [prompt]
+            if uploaded_file is not None:
+                file_bytes = uploaded_file.read()
+                content_to_send.append({
+                    "mime_type": uploaded_file.type,
+                    "data": file_bytes
+                })
 
-                # Using stable gemini-1.5-flash model
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(content_to_send)
-                reply = response.text
-            except Exception as e:
-                reply = f"Error: {e}"
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content(content_to_send)
+            reply = response.text
+        except Exception as e:
+            reply = f"Error: {e}"
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.markdown(reply)
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+    with st.chat_message("assistant"):
+        st.markdown(reply)
