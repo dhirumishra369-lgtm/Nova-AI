@@ -223,7 +223,7 @@ with tab1:
     profit_per_kg = selling_price_per_kg - cost_per_kg
 
     with col_right:
-        st.subheader("📋 Yield Loss Breakdown")
+        st.subheader("📋 Yield Loss & Cost Summary")
         st.markdown(f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
@@ -240,6 +240,23 @@ with tab1:
                     <h4 style="margin:0; color:#16A34A;">{final_yield_kg:,.2f} KG</h4>
                 </div>
             </div>
+            <hr style="margin: 10px 0; border: 0; border-top: 1px solid #E2E8F0;">
+            <p style="margin:0; font-size:13px; color:#64748B;">Total Batch Cost</p>
+            <h3 style="margin:0 0 12px 0; color:#0F172A;">₹{total_batch_cost:,.2f}</h3>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <div>
+                    <p style="margin:0; font-size:12px; color:#64748B;">Cost Per KG (True Cost)</p>
+                    <h3 style="margin:0; color:#0F172A;">₹{cost_per_kg:,.2f}</h3>
+                </div>
+                <div>
+                    <p style="margin:0; font-size:12px; color:#16A34A;">Suggested Selling Price</p>
+                    <h3 style="margin:0; color:#16A34A;">₹{selling_price_per_kg:,.2f}</h3>
+                </div>
+            </div>
+            <p style="margin:10px 0 0 0; font-size:13px; color:#2563EB; font-weight:600;">
+                💡 Net Profit: ₹{profit_per_kg:,.2f} per KG ({target_margin}% Margin)
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -281,6 +298,8 @@ with tab2:
                 Raw Material Batch Weight: {raw_material_weight:.2f} kg
                 Process / Yield Loss: {loss_percent}% ({yield_loss_kg:.2f} kg lost)
                 Final Output Yield: {final_yield_kg:.2f} kg
+                Cost Per KG: ₹{cost_per_kg:.2f}
+                Suggested Selling Price: ₹{selling_price_per_kg:.2f}
 
                 User Query: {user_query}
                 Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
