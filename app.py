@@ -108,7 +108,9 @@ def ask_real_gemini(prompt_text, api_key, file_obj):
     try:
         # Configure Gemini with the user-provided key
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Updated to use gemini-2.5-flash for maximum reliability and modern support
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         contents = [prompt_text]
         
