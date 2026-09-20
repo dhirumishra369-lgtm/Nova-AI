@@ -106,15 +106,15 @@ def ask_real_gemini(prompt_text, api_key, file_obj):
         return "⚠️ Kripya sidebar mein apni valid Google Gemini API Key darj karein taaki yeh seedhe Google Gemini se jud sake."
     
     try:
-        # Configure Gemini with the user-provided key
-        genai.configure(api_key=api_key)
+        # Configure Gemini with the newly generated secure user-provided key
+        genai.configure(api_key=api_key.strip())
         
-        # Updated to use gemini-2.5-flash for maximum reliability and modern support
+        # Using gemini-2.5-flash for maximum support and reliability
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         contents = [prompt_text]
         
-        # If an image or file is uploaded, pass it along to Gemini
+        # If an image or file is uploaded, pass it along safely
         if file_obj is not None:
             bytes_data = file_obj.getvalue()
             contents.append({
