@@ -1,28 +1,12 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🔍 Mera Custom Search Engine")
+# Maan lijiye aapke paas ingredients ka dataframe 'df' hai
+search_term = st.text_input("🔍 Search Ingredient ya Recipe:")
 
-# 1. Data load karein (aap apni Excel ya CSV file yahan daal sakte hain)
-# df = pd.read_excel('apni_file.xlsx')
-
-# Dummy data example ke liye:
-data = {'Recipe': ['Kaju Katli', 'Gulab Jamun', 'Rasgulla', 'Jodhpuri Dana'],
-        'Cost': [500, 300, 250, 400]}
-df = pd.DataFrame(data)
-
-# 2. User se search input lena
-query = st.text_input("Kuch bhi search karein...")
-
-# 3. Search logic aur results dikhana
-if query:
-    # Yeh code query ko match karega (case-insensitive)
-    results = df[df['Recipe'].str.contains(query, case=False, na=False)]
-    
-    if not results.empty:
-        st.success(f"{len(results)} result(s) mile:")
-        st.dataframe(results)
-    else:
-        st.warning("Koi matching data nahi mila.")
+if search_term:
+    # Yeh code user ke type kiye hue text ke hisaab se data filter kar dega
+    filtered_df = df[df['Ingredient'].str.contains(search_term, case=False, na=False)]
+    st.dataframe(filtered_df)
 else:
-    st.info("Search box mein kuch type karein.")
+    st.dataframe(df)
