@@ -7,18 +7,18 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 st.set_page_config(
-    page_title="Recipe Costing & Yield Calculator",
-    page_icon="🍰",
+    page_title="Dana Sweets Costing & Yield Analysis",
+    page_icon="🍬",
     layout="wide"
 )
 
-# ----------------- SESSION STATE & SETUP -----------------
+# ----------------- SESSION STATE & SETUP (DANA SWEETS) -----------------
 if "ingredients" not in st.session_state:
     st.session_state.ingredients = pd.DataFrame([
-        {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
-        {"Ingredient": "Sugar", "Quantity_KG": 8.0, "Rate_Per_KG": 42.0},
-        {"Ingredient": "Silver Vark", "Quantity_KG": 0.05, "Rate_Per_KG": 4000.0},
-        {"Ingredient": "Cardamom / Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0}
+        {"Ingredient": "Besan (Gram Flour)", "Quantity_KG": 10.0, "Rate_Per_KG": 75.0},
+        {"Ingredient": "Sugar (Chashni)", "Quantity_KG": 12.0, "Rate_Per_KG": 42.0},
+        {"Ingredient": "Desi Ghee / Refined Oil", "Quantity_KG": 4.0, "Rate_Per_KG": 140.0},
+        {"Ingredient": "Melon Seeds (Magaj) & Cardamom", "Quantity_KG": 0.5, "Rate_Per_KG": 450.0}
     ])
 
 if "messages" not in st.session_state:
@@ -28,20 +28,20 @@ if "messages" not in st.session_state:
 def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost, labor_cost, pack_cost, total_cost, cost_kg, margin_pct, sp_kg, profit_kg):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Costing & Yield Report"
+    ws.title = "Dana Costing Report"
     ws.views.sheetView[0].showGridLines = True
 
     # Title Banner
     ws.merge_cells("A1:E1")
     title = ws["A1"]
-    title.value = "RECIPE COSTING & BATCH YIELD REPORT"
+    title.value = "DANA SWEETS COSTING & YIELD ANALYSIS REPORT"
     title.font = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
     title.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
     title.alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 35
 
     # Metadata Row
-    ws["A2"] = "Product / Recipe:"
+    ws["A2"] = "Product / Sweet Name:"
     ws["B2"] = recipe_name
     ws["D2"] = "Date:"
     ws["E2"] = datetime.date.today().strftime("%d-%b-%Y")
@@ -54,12 +54,12 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     # Section 1 Header: Raw Material
     ws.merge_cells("A4:E4")
     sec1 = ws["A4"]
-    sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
+    sec1.value = "1. RAW MATERIAL & DANA INGREDIENT BREAKDOWN"
     sec1.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
     sec1.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
     ws.row_dimensions[4].height = 24
 
-    headers = ["S.No.", "Ingredient Name", "Quantity (KG)", "Rate / KG (₹)", "Total Amount (₹)"]
+    headers = ["S.No.", "Ingredient / Item Name", "Quantity (KG)", "Rate / KG (₹)", "Total Amount (₹)"]
     for col_idx, h in enumerate(headers, 1):
         c = ws.cell(row=5, column=col_idx, value=h)
         c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -119,16 +119,16 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     sum_start = tot_r + 2
     ws.merge_cells(f"A{sum_start}:E{sum_start}")
     sec2 = ws[f"A{sum_start}"]
-    sec2.value = "2. YIELD LOSS, OVERHEADS & FINANCIAL SUMMARY"
+    sec2.value = "2. DANA YIELD LOSS, FRYING & FINANCIAL SUMMARY"
     sec2.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
     sec2.fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
     ws.row_dimensions[sum_start].height = 24
 
     metrics = [
-        ("Total Raw Material Batch Weight", f"=C{tot_r}", "KG", '#,##0.00'),
-        ("Process / Moisture Loss (%)", loss_pct / 100.0, "%", '0.0%'),
-        ("Yield Loss Quantity (Wastage/Evaporation)", f"=E{sum_start+1}*E{sum_start+2}", "KG", '#,##0.00'),
-        ("Final Net Yield Output", f"=E{sum_start+1}-E{sum_start+3}", "KG", '#,##0.00'),
+        ("Total Raw Material Input Weight", f"=C{tot_r}", "KG", '#,##0.00'),
+        ("Process / Frying & Moisture Loss (%)", loss_pct / 100.0, "%", '0.0%'),
+        ("Dana Yield Loss Quantity (Evaporation/Scum)", f"=E{sum_start+1}*E{sum_start+2}", "KG", '#,##0.00'),
+        ("Final Net Dana Yield Output", f"=E{sum_start+1}-E{sum_start+3}", "KG", '#,##0.00'),
         ("Raw Material Total Cost", f"=E{tot_r}", "INR", '₹#,##0.00'),
         ("Labour & Fuel Overheads", float(labor_cost), "INR", '₹#,##0.00'),
         ("Packaging & Box Cost", float(pack_cost), "INR", '₹#,##0.00'),
@@ -147,8 +147,8 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
         ws[f"A{r}"].alignment = Alignment(horizontal="left", vertical="center")
         
         ws[f"D{r}"] = unit
-        ws[f"D{r}"].alignment = Alignment(horizontal="center", vertical="center")
-        ws[f"D{r}"].font = Font(name="Calibri", size=10, color="6B7280")
+        ws.cell(row=r, column=4).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=r, column=4).font = Font(name="Calibri", size=10, color="6B7280")
         
         v = ws[f"E{r}"]
         v.value = val
@@ -165,7 +165,7 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
                 cell.font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
 
     ws.column_dimensions["A"].width = 8
-    ws.column_dimensions["B"].width = 30
+    ws.column_dimensions["B"].width = 32
     ws.column_dimensions["C"].width = 16
     ws.column_dimensions["D"].width = 18
     ws.column_dimensions["E"].width = 22
@@ -175,39 +175,39 @@ def generate_professional_excel(recipe_name, df, loss_pct, final_yield, raw_cost
     return out.getvalue()
 
 # ----------------- UI TABS -----------------
-tab1, tab2 = st.tabs(["📊 Recipe Costing & Yield Calculator", "🤖 Google Gemini Chat Consultant"])
+tab1, tab2 = st.tabs(["🍬 Dana Sweets Costing & Yield", "🤖 Google Gemini Live Chat Consultant"])
 
 with tab1:
-    st.caption("Precise cost, batch yield, and margin analysis for commercial kitchens, confectioneries, and bakeries.")
+    st.caption("Precise cost, frying/moisture yield loss, and margin analysis for Motichoor, Laddu, and traditional Dana sweets.")
     
     col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
     with col_left:
-        st.subheader("1. Batch & Product Details")
-        recipe_name = st.text_input("Product / Recipe Name", value="Premium Kaju Katli")
+        st.subheader("1. Dana Batch & Product Details")
+        recipe_name = st.text_input("Sweet / Dana Product Name", value="Motichoor Laddu (Dana Special)")
 
         st.markdown("**Ingredients & Raw Material Rates:**")
-        st.caption("Click directly inside any cell to edit ingredient names, weight (KG), and rate per KG:")
+        st.caption("Click directly inside any cell to edit items, weight (KG), and rate per KG:")
         
         edited_df = st.data_editor(
             st.session_state.ingredients,
             num_rows="dynamic",
             use_container_width=True,
             column_config={
-                "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
+                "Ingredient": st.column_config.TextColumn("Item / Ingredient", required=True),
                 "Quantity_KG": st.column_config.NumberColumn("Quantity (KG)", min_value=0.001, format="%.3f"),
                 "Rate_Per_KG": st.column_config.NumberColumn("Rate / KG (₹)", min_value=0.0, format="₹%.2f"),
             }
         )
 
-        st.subheader("2. Yield Loss & Overheads")
+        st.subheader("2. Frying, Moisture & Overheads")
         c1, c2, c3 = st.columns(3)
         with c1:
-            loss_percent = st.number_input("Cooking / Moisture Loss (%)", min_value=0.0, max_value=90.0, value=12.0, step=0.5)
+            loss_percent = st.number_input("Dana Frying/Moisture Loss (%)", min_value=0.0, max_value=90.0, value=15.0, step=0.5)
         with c2:
-            labor_gas_cost = st.number_input("Labor + Fuel Cost (₹)", min_value=0.0, value=400.0, step=50.0)
+            labor_gas_cost = st.number_input("Bhatti / Labor Cost (₹)", min_value=0.0, value=500.0, step=50.0)
         with c3:
-            packaging_cost = st.number_input("Packaging Cost (₹)", min_value=0.0, value=250.0, step=50.0)
+            packaging_cost = st.number_input("Box / Packaging Cost (₹)", min_value=0.0, value=300.0, step=50.0)
 
         target_margin = st.slider("Target Gross Margin (%)", min_value=5.0, max_value=80.0, value=35.0, step=1.0)
 
@@ -226,7 +226,7 @@ with tab1:
     profit_per_kg = selling_price_per_kg - cost_per_kg
 
     with col_right:
-        st.subheader("📋 Yield Loss & Cost Summary")
+        st.subheader("📋 Dana Yield Loss & Cost Summary")
         st.markdown(f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
@@ -235,7 +235,7 @@ with tab1:
                     <h4 style="margin:0; color:#0F172A;">{raw_material_weight:,.2f} KG</h4>
                 </div>
                 <div>
-                    <p style="margin:0; font-size:12px; color:#DC2626;">📉 Yield Loss</p>
+                    <p style="margin:0; font-size:12px; color:#DC2626;">📉 Dana Loss</p>
                     <h4 style="margin:0; color:#DC2626;">{yield_loss_kg:,.2f} KG ({loss_percent}%)</h4>
                 </div>
                 <div>
@@ -272,18 +272,18 @@ with tab1:
         )
 
         st.download_button(
-            label="📥 Download Professional Excel Report (.xlsx)",
+            label="📥 Download Professional Dana Excel Report (.xlsx)",
             data=excel_file_bytes,
-            file_name=f"{recipe_name.replace(' ', '_')}_Costing_Sheet.xlsx",
+            file_name=f"{recipe_name.replace(' ', '_')}_Dana_Costing.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
 
 with tab2:
-    st.subheader("🤖 Google Gemini Live Chat Consultant")
-    st.caption("Ask questions naturally, just like Google Gemini. The AI knows your active recipe details and costs.")
+    st.subheader("🤖 Google Gemini Dana & Confectionery Consultant")
+    st.caption("Ask questions about motichoor texture, jhaari/boondi frying temperature, sugar syrup consistency (chashni tar), or yield loss.")
     
-    api_key = st.text_input("Enter Gemini API Key", type="password", key="gemini_chat_key")
+    api_key = st.text_input("Enter Gemini API Key", type="password", key="dana_chat_key")
     
     # Display chat history
     for message in st.session_state.messages:
@@ -291,7 +291,7 @@ with tab2:
             st.markdown(message["content"])
 
     # Accept user input
-    if prompt := st.chat_input("Google Gemini se kuch bhi puchiye... (e.g., How to optimize this recipe?)"):
+    if prompt := st.chat_input("Dana sweets ya cost ke baare mein kuch bhi puchiye..."):
         if not api_key:
             st.warning("Please enter your Gemini API Key first.")
         else:
@@ -306,17 +306,17 @@ with tab2:
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 
                 context_prompt = f"""
-                You are an expert commercial food technologist, chef, and bakery production consultant.
-                Current Active Recipe Context:
-                - Product: {recipe_name}
+                You are an expert master halwai, commercial food technologist, and Indian sweets production consultant specializing in daane daar sweets (Motichoor, Laddu, Boondi, Jodhpuri Dana).
+                Current Active Product Context:
+                - Sweet Name: {recipe_name}
                 - Raw Material Input: {raw_material_weight:.2f} kg
-                - Process / Yield Loss: {loss_percent}% ({yield_loss_kg:.2f} kg lost)
+                - Frying / Moisture Yield Loss: {loss_percent}% ({yield_loss_kg:.2f} kg lost)
                 - Final Output Net Yield: {final_yield_kg:.2f} kg
                 - True Cost Per KG: ₹{cost_per_kg:.2f}
-                - Suggested Selling Price: ₹{selling_price_per_kg:.2f}
+                - Suggested Selling Price: ₹{suggested_selling_price := selling_price_per_kg:,.2f}
 
                 User Query: {prompt}
-                Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
+                Please provide practical, accurate, and professional halwai guidance regarding texture, syrup consistency, oil temperature, or cost optimization.
                 """
                 
                 with st.spinner("Gemini is thinking..."):
