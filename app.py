@@ -26,13 +26,16 @@ NUTRIENTS_DB = {
     "cashew": {"kcal": 553, "protein": 18.2, "fat": 43.8, "carbs": 30.2},
     "sugar": {"kcal": 387, "protein": 0.0, "fat": 0.0, "carbs": 100.0},
     "ghee": {"kcal": 900, "protein": 0.0, "fat": 100.0, "carbs": 0.0},
+    "butter": {"kcal": 717, "protein": 0.85, "fat": 81.0, "carbs": 0.06},
+    "milk": {"kcal": 42, "protein": 3.4, "fat": 1.0, "carbs": 5.0},
+    "pistachio": {"kcal": 562, "protein": 20.0, "fat": 45.0, "carbs": 28.0},
     "cardamom": {"kcal": 311, "protein": 11.0, "fat": 7.0, "carbs": 68.0},
     "silver vark": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
 }
 
 
 def get_nutrients(ingredient_name):
-  name_lower = ingredient_name.lower()
+  name_lower = str(ingredient_name).lower()
   for key, val in NUTRIENTS_DB.items():
     if key in name_lower:
       return val
@@ -283,76 +286,59 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
-  with st.expander("📁 Import Ingredients from Excel / CSV File"):
-    uploaded_ingredients_file = st.file_uploader(
-        "Upload ingredient sheet", type=["csv", "xlsx"], key="ing_file"
+  # Master Recipe Collection File Uploader (Multi-sheet support)
+  with st.expander(
+      "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
+  ):
+    uploaded_master_file = st.file_uploader(
+        "Upload Bakery_Recipes_Master_Collection.xlsx",
+        type=["xlsx"],
+        key="master_file",
     )
-    if uploaded_ingredients_file is not None:
+    if uploaded_master_file is not None:
       try:
-        if uploaded_ingredients_file.name.endswith(".csv"):
-          temp_df = pd.read_csv(uploaded_ingredients_file)
-        else:
-          temp_df = pd.read_excel(uploaded_ingredients_file)
+        xls = pd.ExcelFile(uploaded_master_file)
+        sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
 
-        temp_df.columns = temp_df.columns.str.strip()
-        rename_map = {}
-        for col in temp_df.columns:
-          col_lower = str(col).lower()
-          if (
-              "ingredient" in col_lower
-              or "item" in col_lower
-              or "name" in col_lower
-              or "raw" in col_lower
-          ):
-            rename_map[col] = "Ingredient"
-          elif (
-              "quantity" in col_lower
-              or "qty" in col_lower
-              or "weight" in col_lower
-              or "wt" in col_lower
-              or "amount" in col_lower
-          ):
-            rename_map[col] = "Quantity_KG"
-          elif (
-              "rate" in col_lower
-              or "price" in col_lower
-              or "cost" in col_lower
-              or "per" in col_lower
-              or "rs" in col_lower
-          ):
-            rename_map[col] = "Rate_Per_KG"
+        selected_sheet = st.selectbox(
+            "Select Recipe Sheet to Load", sheet_options
+        )
 
-        temp_df = temp_df.rename(columns=rename_map)
+        if st.button("Load Selected Recipe"):
+          # Read starting from row index 2 where headers ('Ingredient Name', 'Base Qty', etc.) reside
+          recipe_df = pd.read_excel(uploaded_master_file, sheet_name=selected_sheet, header=2)
+          recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
 
-        if "Ingredient" not in temp_df.columns and len(temp_df.columns) > 0:
-          temp_df = temp_df.rename(columns={temp_df.columns[0]: "Ingredient"})
-        if "Quantity_KG" not in temp_df.columns and len(temp_df.columns) > 1:
-          temp_df = temp_df.rename(columns={temp_df.columns[1]: "Quantity_KG"})
-        if "Rate_Per_KG" not in temp_df.columns and len(temp_df.columns) > 2:
-          temp_df = temp_df.rename(columns={temp_df.columns[2]: "Rate_Per_KG"})
+          # Convert Base Qty from grams to KG
+          def convert_to_kg(row):
+            qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
+            unit = str(row["Unit"]).strip().lower()
+            if unit in ["g", "gram", "grams"]:
+              return qty / 1000.0
+            return qty  # already KG if specified
 
-        if all(
-            col in temp_df.columns
-            for col in ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
-        ):
-          st.session_state.ingredients = temp_df[
-              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
-          ].dropna(how="all")
-          st.success("Ingredients imported successfully!")
-          st.rerun()
-        else:
-          st.error(
-              "Could not read columns. Please ensure your file has at least 3"
-              " columns."
+          recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
+          recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
+          recipe_df["Rate_Per_KG"] = (
+              500.0  # Default rate placeholder (editable in table)
           )
+
+          st.session_state.ingredients = recipe_df[
+              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
+          ].reset_index(drop=True)
+          st.success(
+              f"Successfully loaded recipe: {selected_sheet}! Scroll down"
+              " to view and edit rates."
+          )
+          st.rerun()
       except Exception as e:
-        st.error(f"Error loading file: {e}")
+        st.error(f"Error reading master collection file: {e}")
 
   col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
   with col_left:
     st.subheader("1. Batch & Product Details")
-    recipe_name = st.text_input("Product / Recipe Name", value="Premium Kaju Katli")
+    recipe_name = st.text_input("Product / Recipe Name", value="Premium Recipe")
 
     st.markdown("**Ingredients & Raw Material Rates:**")
     st.caption(
@@ -382,7 +368,7 @@ with tab1:
           "Cooking / Moisture Loss (%)",
           min_value=0.0,
           max_value=90.0,
-          value=12.0,
+          value=10.0,
           step=0.5,
       )
     with c2:
