@@ -289,7 +289,7 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
-  # Master Recipe Collection File Uploader
+  # Master Recipe Collection File Uploader with Form to enforce instant state update
   with st.expander(
       "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
   ):
@@ -303,11 +303,13 @@ with tab1:
         xls = pd.ExcelFile(uploaded_master_file)
         sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
 
-        selected_sheet = st.selectbox(
-            "Select Recipe Sheet to Load", sheet_options
-        )
+        with st.form("recipe_select_form"):
+          selected_sheet = st.selectbox(
+              "Select Recipe Sheet to Load", sheet_options
+          )
+          submit_button = st.form_submit_button("Load Selected Recipe")
 
-        if st.button("Load Selected Recipe"):
+        if submit_button:
           recipe_df = pd.read_excel(
               uploaded_master_file, sheet_name=selected_sheet, header=2
           )
@@ -363,7 +365,6 @@ with tab1:
             ),
         },
     )
-    # Save live edits back to session state
     st.session_state.ingredients = edited_df
 
     st.subheader("2. Yield Loss & Overheads")
