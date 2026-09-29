@@ -11,7 +11,8 @@ st.set_page_config(
     page_title="Recipe Costing & Yield Calculator", page_icon="🍰", layout="wide"
 )
 
-# ----------------- SESSION STATE & SETUP -----------------
+# ----------------- MASTER FILE UPLOADER & CACHE SETUP -----------------
+# Session state variables
 if "ingredients" not in st.session_state:
   st.session_state.ingredients = pd.DataFrame([
       {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
@@ -22,6 +23,9 @@ if "ingredients" not in st.session_state:
 
 if "recipe_title" not in st.session_state:
   st.session_state.recipe_title = "Premium Kaju Katli"
+
+if "master_excel_data" not in st.session_state:
+  st.session_state.master_excel_data = None
 
 # Standard Nutritional Database per 100g for common ingredients
 NUTRIENTS_DB = {
@@ -289,7 +293,7 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
-  # Master Recipe Collection File Uploader with Form to enforce instant state update
+  # Master Recipe Collection File Uploader
   with st.expander(
       "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
   ):
@@ -299,41 +303,47 @@ with tab1:
         key="master_file",
     )
     if uploaded_master_file is not None:
-      try:
-        xls = pd.ExcelFile(uploaded_master_file)
-        sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
+      st.session_state.master_excel_data = uploaded_master_file
 
-        with st.form("recipe_select_form"):
-          selected_sheet = st.selectbox(
-              "Select Recipe Sheet to Load", sheet_options
-          )
-          submit_button = st.form_submit_button("Load Selected Recipe")
+  if st.session_state.master_excel_data is not None:
+    try:
+      xls = pd.ExcelFile(st.session_state.master_excel_data)
+      sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
 
-        if submit_button:
-          recipe_df = pd.read_excel(
-              uploaded_master_file, sheet_name=selected_sheet, header=2
-          )
-          recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
+      # Callback function to instantly load selected recipe on change
+      def on_recipe_select():
+        chosen_sheet = st.session_state.recipe_dropdown
+        recipe_df = pd.read_excel(
+            st.session_state.master_excel_data,
+            sheet_name=chosen_sheet,
+            header=2,
+        )
+        recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
 
-          def convert_to_kg(row):
-            qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
-            unit = str(row["Unit"]).strip().lower()
-            if unit in ["g", "gram", "grams"]:
-              return qty / 1000.0
-            return qty
+        def convert_to_kg(row):
+          qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
+          unit = str(row["Unit"]).strip().lower()
+          if unit in ["g", "gram", "grams"]:
+            return qty / 1000.0
+          return qty
 
-          recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
-          recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
-          recipe_df["Rate_Per_KG"] = 500.0
+        recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
+        recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
+        recipe_df["Rate_Per_KG"] = 500.0
 
-          st.session_state.ingredients = recipe_df[
-              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
-          ].reset_index(drop=True)
-          st.session_state.recipe_title = selected_sheet
-          st.success(f"Successfully loaded recipe: {selected_sheet}!")
-          st.rerun()
-      except Exception as e:
-        st.error(f"Error reading master collection file: {e}")
+        st.session_state.ingredients = recipe_df[
+            ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
+        ].reset_index(drop=True)
+        st.session_state.recipe_title = chosen_sheet
+
+      selected_sheet = st.selectbox(
+          "Select Recipe Sheet to Load (Updates Instantly)",
+          sheet_options,
+          key="recipe_dropdown",
+          on_change=on_recipe_select,
+      )
+    except Exception as e:
+      st.error(f"Error reading master file: {e}")
 
   col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
