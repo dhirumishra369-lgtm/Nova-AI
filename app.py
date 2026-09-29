@@ -40,6 +40,7 @@ NUTRIENTS_DB = {
     "pistachio": {"kcal": 562, "protein": 20.0, "fat": 45.0, "carbs": 28.0},
     "cardamom": {"kcal": 311, "protein": 11.0, "fat": 7.0, "carbs": 68.0},
     "silver vark": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
+    "vanilla essence": {"kcal": 288, "protein": 0.1, "fat": 0.06, "carbs": 12.65},
 }
 
 
@@ -343,7 +344,8 @@ with tab1:
         def convert_to_kg(row):
           qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
           unit = str(row["Unit"]).strip().lower()
-          if unit in ["g", "gram", "grams"]:
+          # Handle both grams (g, gram, grams) and milliliters (ml) by dividing by 1000
+          if unit in ["g", "gram", "grams", "ml"]:
             return qty / 1000.0
           return qty
 
@@ -459,7 +461,6 @@ with tab1:
   with col_right:
     st.subheader("📋 Output & Cost Summary")
 
-    # Display Ingredient-wise Total Value Breakdown Table
     st.markdown("**Ingredient-wise Total Cost Breakdown:**")
     display_summary_df = clean_df[
         ["Ingredient", "Quantity_KG", "Rate_Per_KG", "Total Amount (₹)"]
