@@ -11,8 +11,7 @@ st.set_page_config(
     page_title="Recipe Costing & Yield Calculator", page_icon="🍰", layout="wide"
 )
 
-# ----------------- MASTER FILE UPLOADER & CACHE SETUP -----------------
-# Session state variables
+# ----------------- SESSION STATE & SETUP -----------------
 if "ingredients" not in st.session_state:
   st.session_state.ingredients = pd.DataFrame([
       {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
@@ -26,6 +25,9 @@ if "recipe_title" not in st.session_state:
 
 if "master_excel_data" not in st.session_state:
   st.session_state.master_excel_data = None
+
+if "price_lookup_dict" not in st.session_state:
+  st.session_state.price_lookup_dict = {}
 
 # Standard Nutritional Database per 100g for common ingredients
 NUTRIENTS_DB = {
@@ -289,28 +291,48 @@ tab1, tab2, tab3 = st.tabs([
 # ================= TAB 1: CALCULATOR =================
 with tab1:
   st.caption(
-      "Precise cost, batch yield, and margin analysis for commercial kitchens,"
-      " confectioneries, and bakeries."
+      "Precise cost, batch yield, and margin analysis with automatic Master"
+      " Price List integration."
   )
 
-  # Master Recipe Collection File Uploader
-  with st.expander(
-      "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
-  ):
+  # Sidebar/Expander for Price List & Master Recipes
+  col_up1, col_up2 = st.columns(2)
+  with col_up1:
     uploaded_master_file = st.file_uploader(
-        "Upload Bakery_Recipes_Master_Collection.xlsx",
+        "1. Upload Master Recipe Collection (.xlsx)",
         type=["xlsx"],
         key="master_file",
     )
     if uploaded_master_file is not None:
       st.session_state.master_excel_data = uploaded_master_file
 
+  with col_up2:
+    uploaded_price_file = st.file_uploader(
+        "2. Upload Bakery Price List (.xlsx)", type=["xlsx"], key="price_file"
+    )
+    if uploaded_price_file is not None:
+      try:
+        price_df = pd.read_excel(uploaded_price_file)
+        # Create mapping dictionary {Description.lower(): Unit Cost}
+        price_map = {}
+        for _, row in price_df.iterrows():
+          desc = str(row.get("Description", "")).strip().lower()
+          cost = float(row.get("Unit Cost", 0.0))
+          if desc:
+            price_map[desc] = cost
+        st.session_state.price_lookup_dict = price_map
+        st.success(
+            f"Price list loaded successfully ({len(price_map)} items mapped)!"
+        )
+      except Exception as e:
+        st.error(f"Error loading price list: {e}")
+
   if st.session_state.master_excel_data is not None:
     try:
       xls = pd.ExcelFile(st.session_state.master_excel_data)
       sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
 
-      # Callback function to instantly load selected recipe on change
+
       def on_recipe_select():
         chosen_sheet = st.session_state.recipe_dropdown
         recipe_df = pd.read_excel(
@@ -329,7 +351,20 @@ with tab1:
 
         recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
         recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
-        recipe_df["Rate_Per_KG"] = 500.0
+
+        # Fetch rate automatically from loaded price list if available, else fallback to 500
+        rates = []
+        for ing_name in recipe_df["Ingredient Name"]:
+          clean_name = str(ing_name).strip().lower()
+          matched_rate = 500.0  # default fallback
+          # Search in loaded price list
+          for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+            if clean_name in p_desc or p_desc in clean_name:
+              matched_rate = p_cost
+              break
+          rates.append(matched_rate)
+
+        recipe_df["Rate_Per_KG"] = rates
 
         st.session_state.ingredients = recipe_df[
             ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
@@ -337,7 +372,7 @@ with tab1:
         st.session_state.recipe_title = chosen_sheet
 
       selected_sheet = st.selectbox(
-          "Select Recipe Sheet to Load (Updates Instantly)",
+          "Select Recipe Sheet to Load (Auto-updates Cost & Rates)",
           sheet_options,
           key="recipe_dropdown",
           on_change=on_recipe_select,
@@ -587,7 +622,7 @@ with tab3:
 
         prompt = f"""
                 You are an expert commercial food technologist, chef, and bakery production consultant.
-                Current Product: {recipe_name}
+                Product: {recipe_name}
                 Raw Material Batch Weight: {raw_material_weight:.2f} kg
                 Process Loss: {loss_percent}%
                 Final Output Yield: {final_yield_kg:.2f} kg
