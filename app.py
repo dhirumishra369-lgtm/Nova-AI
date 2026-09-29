@@ -3,6 +3,7 @@ import io
 import google.generativeai as genai
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from PIL import Image
 import pandas as pd
 import streamlit as st
 
@@ -31,7 +32,7 @@ NUTRIENTS_DB = {
 
 
 def get_nutrients(ingredient_name):
-  name_lower = str(ingredient_name).lower()
+  name_lower = ingredient_name.lower()
   for key, val in NUTRIENTS_DB.items():
     if key in name_lower:
       return val
@@ -282,37 +283,40 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
-  # Optional File Uploader for importing ingredient sheets (CSV/Excel)
+  # File Uploader for Ingredients
   with st.expander("📁 Import Ingredients from Excel / CSV File"):
-    uploaded_ingredient_file = st.file_uploader(
-        "Upload CSV or Excel file containing columns: Ingredient, Quantity_KG,"
-        " Rate_Per_KG",
+    uploaded_ingredients_file = st.file_uploader(
+        "Upload ingredient sheet (Columns required: Ingredient, Quantity_KG,"
+        " Rate_Per_KG)",
         type=["csv", "xlsx"],
+        key="ing_file",
     )
-    if uploaded_ingredient_file is not None:
+    if uploaded_ingredients_file is not None:
       try:
-        if uploaded_ingredient_file.name.endswith(".csv"):
-          imported_df = pd.read_csv(uploaded_ingredient_file)
+        if uploaded_ingredients_file.name.endswith(".csv"):
+          temp_df = pd.read_csv(uploaded_ingredients_file)
         else:
-          imported_df = pd.read_excel(uploaded_ingredient_file)
+          temp_df = pd.read_excel(uploaded_ingredients_file)
 
-        if {"Ingredient", "Quantity_KG", "Rate_Per_KG"}.issubset(
-            imported_df.columns
+        if all(
+            col in temp_df.columns
+            for col in ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
         ):
-          st.session_state.ingredients = imported_df[
+          st.session_state.ingredients = temp_df[
               ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
           ]
           st.success(
-              "Ingredients successfully imported from file! Switch back to the"
-              " table to view."
+              "Ingredients imported successfully! Scroll down to see updated"
+              " table."
           )
+          st.rerun()
         else:
           st.error(
-              "File must contain columns: 'Ingredient', 'Quantity_KG',"
-              " 'Rate_Per_KG'"
+              "Uploaded file must contain columns: 'Ingredient',"
+              " 'Quantity_KG', 'Rate_Per_KG'"
           )
       except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"Error loading file: {e}")
 
   col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
@@ -510,50 +514,47 @@ with tab2:
 with tab3:
   st.subheader("🤖 AI Chef & Production Consultant")
   st.caption(
-      "Ask questions or attach recipe photos, handwritten notes, or documents for"
-      " instant AI analysis."
+      "Ask questions or attach handwritten recipe sheets, log photos, or"
+      " documents for AI analysis."
   )
 
-  # File attachment option for AI
+  # File Attachment for AI (Images / Documents)
   uploaded_ai_file = st.file_uploader(
-      "Attach a photo (recipe/sheet) or document for AI review",
+      "Attach Production Log / Recipe Image / Document (Optional)",
       type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "xlsx"],
+      key="ai_file_uploader",
   )
 
   user_query = st.text_area(
       "Your Question",
       placeholder=(
-          "e.g., Analyze this attached production sheet or suggest how to reduce"
-          " moisture loss below 12%?"
+          "e.g., Analyze the attached recipe sheet and suggest how to reduce"
+          " moisture loss or optimize cost."
       ),
   )
 
   if st.button("Ask AI Consultant", type="primary"):
     if not user_query and not uploaded_ai_file:
-      st.warning(
-          "Please type a question or attach a file for the AI consultant."
-      )
+      st.warning("Please type a question or attach a file.")
     else:
       try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel("gemini-1.5-flash")
 
         content_parts = []
-        # Handle file upload if present
+        # Handle attached file if present
         if uploaded_ai_file is not None:
-          file_bytes = uploaded_ai_file.getvalue()
-          file_name = uploaded_ai_file.name
-          # If it's an image
           if uploaded_ai_file.type.startswith("image/"):
-            content_parts.append({
-                "mime_type": uploaded_ai_file.type,
-                "data": file_bytes,
-            })
-          else:
-            # For text/spreadsheet data summary
-            content_parts.append(
-                f"[Attached File: {file_name}]\n(File content uploaded by user)"
-            )
+            img = Image.open(uploaded_ai_file)
+            content_parts.append(img)
+          elif uploaded_ai_file.type in [
+              "text/plain",
+              "text/csv",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          ]:
+            # Read text/data content
+            file_bytes = uploaded_ai_file.getvalue()
+            content_parts.append(file_bytes.decode("utf-8", errors="ignore"))
 
         prompt = f"""
                 You are an expert commercial food technologist, chef, and bakery production consultant.
@@ -564,17 +565,16 @@ with tab3:
                 Cost Per KG: ₹{cost_per_kg:.2f}
                 Estimated Energy: {yield_kcal_100g:.1f} kcal per 100g
 
-                User Query: {user_query if user_query else "Please analyze the attached document/image in the context of this batch production."}
+                User Query: {user_query}
                 Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
                 """
         content_parts.append(prompt)
 
-        with st.spinner("AI is analyzing your request and attachment..."):
+        with st.spinner("AI is analyzing your recipe and attached file..."):
           response = model.generate_content(content_parts)
           st.success("Consultant Recommendation:")
           st.write(response.text)
       except Exception as e:
         st.error(
-            f"Configuration or Processing Error: Please ensure"
-            f" GOOGLE_API_KEY is configured in Streamlit secrets. Details: {e}"
+            f"Configuration Error or File Processing Error. Details: {e}"
         )
