@@ -36,6 +36,8 @@ NUTRIENTS_DB = {
     "butter": {"kcal": 717, "protein": 0.85, "fat": 81.0, "carbs": 0.06},
     "milk": {"kcal": 42, "protein": 3.4, "fat": 1.0, "carbs": 5.0},
     "pistachio": {"kcal": 562, "protein": 20.0, "fat": 45.0, "carbs": 28.0},
+    "almond": {"kcal": 579, "protein": 21.1, "fat": 49.9, "carbs": 21.6},
+    "badam": {"kcal": 579, "protein": 21.1, "fat": 49.9, "carbs": 21.6},
     "cardamom": {"kcal": 311, "protein": 11.0, "fat": 7.0, "carbs": 68.0},
     "silver vark": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
     "salt": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
@@ -359,6 +361,17 @@ with tab1:
               if "tata salt" in p_desc or p_desc == "salt":
                 matched_rate = p_cost
                 break
+          elif "badam" in clean_name or "almond" in clean_name:
+            # Match directly with "almond factory" from price list
+            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+              if "almond factory" in p_desc or "badam factory" in p_desc:
+                matched_rate = p_cost
+                break
+            if matched_rate == 500.0:
+              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+                if "almond" in p_desc or "badam" in p_desc:
+                  matched_rate = p_cost
+                  break
           else:
             for p_desc, p_cost in st.session_state.price_lookup_dict.items():
               if clean_name in p_desc or p_desc in clean_name:
