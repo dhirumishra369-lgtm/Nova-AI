@@ -1,9 +1,7 @@
 import datetime
 import io
-import google.generativeai as genai
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from PIL import Image
 import pandas as pd
 import streamlit as st
 
@@ -284,10 +282,9 @@ def generate_professional_excel(
 
 
 # ----------------- UI TABS SETUP -----------------
-tab1, tab2, tab3 = st.tabs([
-    "📊 Recipe Costing & Yield",
-    "🥗 Calorie & Nutrition",
-    "🤖 AI Chef & Consultant",
+tab1, tab2 = st.tabs([
+    "📊 Recipe Costing, Yield & Pricing",
+    "🥗 Calorie & Nutrition Breakdown",
 ])
 
 # ================= TAB 1: CALCULATOR =================
@@ -355,9 +352,8 @@ with tab1:
         rates = []
         for ing_name in recipe_df["Ingredient Name"]:
           clean_name = str(ing_name).strip().lower()
-          matched_rate = 500.0  # default fallback
+          matched_rate = 500.0
 
-          # Special exact check for Salt to prevent matching "butter salted"
           if clean_name == "salt":
             for p_desc, p_cost in st.session_state.price_lookup_dict.items():
               if "tata salt" in p_desc or p_desc == "salt":
@@ -600,70 +596,3 @@ with tab2:
     st.metric(label="Total Fat", value=f"{yield_fat_100g:.1f} g")
   with col_n4:
     st.metric(label="Carbohydrates", value=f"{yield_carbs_100g:.1f} g")
-
-
-# ================= TAB 3: AI CONSULTANT =================
-with tab3:
-  st.subheader(f"🤖 AI Chef & Production Consultant — {recipe_name}")
-  st.caption(
-      "Ask questions or attach handwritten recipe sheets, log photos, or"
-      " documents for AI analysis."
-  )
-
-  uploaded_ai_file = st.file_uploader(
-      "Attach Production Log / Recipe Image / Document (Optional)",
-      type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "xlsx"],
-      key="ai_file_uploader",
-  )
-
-  user_query = st.text_area(
-      "Your Question",
-      placeholder=(
-          f"e.g., How can I optimize costs or reduce process loss for"
-          f" {recipe_name}?"
-      ),
-  )
-
-  if st.button("Ask AI Consultant", type="primary"):
-    if not user_query and not uploaded_ai_file:
-      st.warning("Please type a question or attach a file.")
-    else:
-      try:
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel("gemini-1.5-flash")
-
-        content_parts = []
-        if uploaded_ai_file is not None:
-          if uploaded_ai_file.type.startswith("image/"):
-            img = Image.open(uploaded_ai_file)
-            content_parts.append(img)
-          elif uploaded_ai_file.type in [
-              "text/plain",
-              "text/csv",
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          ]:
-            file_bytes = uploaded_ai_file.getvalue()
-            content_parts.append(file_bytes.decode("utf-8", errors="ignore"))
-
-        prompt = f"""
-                You are an expert commercial food technologist, chef, and bakery production consultant.
-                Product: {recipe_name}
-                Raw Material Batch Weight: {raw_material_weight:.2f} kg
-                Process Loss: {loss_percent}%
-                Final Output Yield: {final_yield_kg:.2f} kg
-                Cost Per KG: ₹{cost_per_kg:.2f}
-                Estimated Energy: {yield_kcal_100g:.1f} kcal per 100g
-
-                User Query: {user_query}
-                Please provide practical, accurate, and scientifically backed commercial kitchen guidance for this specific recipe.
-                """
-        content_parts.append(prompt)
-
-        with st.spinner("AI is analyzing your recipe and attached file..."):
-          response = model.generate_content(content_parts)
-          st.success("Consultant Recommendation:")
-          st.write(response.text)
-      except Exception as e:
-        st.error(
-            f"Configuration Error or File Processing Error. Details: {e}"
-        )
