@@ -20,8 +20,8 @@ if "ingredients" not in st.session_state:
       {"Ingredient": "Cardamom / Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0},
   ])
 
-if "selected_recipe_name" not in st.session_state:
-  st.session_state.selected_recipe_name = "Premium Kaju Katli"
+if "recipe_title" not in st.session_state:
+  st.session_state.recipe_title = "Premium Kaju Katli"
 
 # Standard Nutritional Database per 100g for common ingredients
 NUTRIENTS_DB = {
@@ -294,7 +294,9 @@ with tab1:
       "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
   ):
     uploaded_master_file = st.file_uploader(
-        "Upload Master Excel Collection", type=["xlsx"], key="master_file"
+        "Upload Bakery_Recipes_Master_Collection.xlsx",
+        type=["xlsx"],
+        key="master_file",
     )
     if uploaded_master_file is not None:
       try:
@@ -325,7 +327,7 @@ with tab1:
           st.session_state.ingredients = recipe_df[
               ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
           ].reset_index(drop=True)
-          st.session_state.selected_recipe_name = selected_sheet
+          st.session_state.recipe_title = selected_sheet
           st.success(f"Successfully loaded recipe: {selected_sheet}!")
           st.rerun()
       except Exception as e:
@@ -336,8 +338,9 @@ with tab1:
   with col_left:
     st.subheader("1. Batch & Product Details")
     recipe_name = st.text_input(
-        "Product / Recipe Name", value=st.session_state.selected_recipe_name
+        "Product / Recipe Name", value=st.session_state.recipe_title
     )
+    st.session_state.recipe_title = recipe_name
 
     st.markdown("**Ingredients & Raw Material Rates:**")
     st.caption(
@@ -349,6 +352,7 @@ with tab1:
         st.session_state.ingredients,
         num_rows="dynamic",
         use_container_width=True,
+        key="recipe_data_editor",
         column_config={
             "Ingredient": st.column_config.TextColumn("Ingredient", required=True),
             "Quantity_KG": st.column_config.NumberColumn(
@@ -359,6 +363,8 @@ with tab1:
             ),
         },
     )
+    # Save live edits back to session state
+    st.session_state.ingredients = edited_df
 
     st.subheader("2. Yield Loss & Overheads")
     c1, c2, c3 = st.columns(3)
@@ -406,11 +412,13 @@ with tab1:
   profit_per_kg = selling_price_per_kg - cost_per_kg
 
   with col_right:
-    st.subheader(f"📋 Output & Cost Summary ({recipe_name})")
+    st.subheader("📋 Output & Cost Summary")
     st.markdown(
         f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost ({recipe_name})</p>
+            <p style="margin:0; font-size:14px; color:#64748B;">Selected Recipe: <b>{recipe_name}</b></p>
+            <hr style="margin: 10px 0; border: 0; border-top: 1px solid #E2E8F0;">
+            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
             <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
             <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
             <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
@@ -462,7 +470,7 @@ with tab1:
 
 # ================= TAB 2: CALORIE & NUTRITION =================
 with tab2:
-  st.subheader(f"🥗 Nutritional & Calorie Breakdown — {recipe_name}")
+  st.subheader(f"🥗 Nutritional & Calorie Breakdown for: {recipe_name}")
   st.caption(
       "Estimated nutritional values per ingredient based on standard food"
       " composition data (per 100g basis)."
@@ -525,7 +533,7 @@ with tab2:
 
 # ================= TAB 3: AI CONSULTANT =================
 with tab3:
-  st.subheader(f"🤖 AI Chef & Production Consultant ({recipe_name})")
+  st.subheader(f"🤖 AI Chef & Production Consultant — {recipe_name}")
   st.caption(
       "Ask questions or attach handwritten recipe sheets, log photos, or"
       " documents for AI analysis."
@@ -540,7 +548,7 @@ with tab3:
   user_query = st.text_area(
       "Your Question",
       placeholder=(
-          f"e.g., How to optimize production cost or reduce process loss for"
+          f"e.g., How can I optimize costs or reduce process loss for"
           f" {recipe_name}?"
       ),
   )
@@ -576,7 +584,7 @@ with tab3:
                 Estimated Energy: {yield_kcal_100g:.1f} kcal per 100g
 
                 User Query: {user_query}
-                Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
+                Please provide practical, accurate, and scientifically backed commercial kitchen guidance for this specific recipe.
                 """
         content_parts.append(prompt)
 
