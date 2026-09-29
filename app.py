@@ -20,6 +20,9 @@ if "ingredients" not in st.session_state:
       {"Ingredient": "Cardamom / Ghee", "Quantity_KG": 0.2, "Rate_Per_KG": 600.0},
   ])
 
+if "selected_recipe_name" not in st.session_state:
+  st.session_state.selected_recipe_name = "Premium Kaju Katli"
+
 # Standard Nutritional Database per 100g for common ingredients
 NUTRIENTS_DB = {
     "kaju": {"kcal": 553, "protein": 18.2, "fat": 43.8, "carbs": 30.2},
@@ -286,14 +289,12 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
-  # Master Recipe Collection File Uploader (Multi-sheet support)
+  # Master Recipe Collection File Uploader
   with st.expander(
       "📁 Import Master Recipe Collection (Excel with Multiple Sheets)"
   ):
     uploaded_master_file = st.file_uploader(
-        "Upload Bakery_Recipes_Master_Collection.xlsx",
-        type=["xlsx"],
-        key="master_file",
+        "Upload Master Excel Collection", type=["xlsx"], key="master_file"
     )
     if uploaded_master_file is not None:
       try:
@@ -305,31 +306,27 @@ with tab1:
         )
 
         if st.button("Load Selected Recipe"):
-          # Read starting from row index 2 where headers ('Ingredient Name', 'Base Qty', etc.) reside
-          recipe_df = pd.read_excel(uploaded_master_file, sheet_name=selected_sheet, header=2)
+          recipe_df = pd.read_excel(
+              uploaded_master_file, sheet_name=selected_sheet, header=2
+          )
           recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
 
-          # Convert Base Qty from grams to KG
           def convert_to_kg(row):
             qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
             unit = str(row["Unit"]).strip().lower()
             if unit in ["g", "gram", "grams"]:
               return qty / 1000.0
-            return qty  # already KG if specified
+            return qty
 
           recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
           recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
-          recipe_df["Rate_Per_KG"] = (
-              500.0  # Default rate placeholder (editable in table)
-          )
+          recipe_df["Rate_Per_KG"] = 500.0
 
           st.session_state.ingredients = recipe_df[
               ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
           ].reset_index(drop=True)
-          st.success(
-              f"Successfully loaded recipe: {selected_sheet}! Scroll down"
-              " to view and edit rates."
-          )
+          st.session_state.selected_recipe_name = selected_sheet
+          st.success(f"Successfully loaded recipe: {selected_sheet}!")
           st.rerun()
       except Exception as e:
         st.error(f"Error reading master collection file: {e}")
@@ -338,7 +335,9 @@ with tab1:
 
   with col_left:
     st.subheader("1. Batch & Product Details")
-    recipe_name = st.text_input("Product / Recipe Name", value="Premium Recipe")
+    recipe_name = st.text_input(
+        "Product / Recipe Name", value=st.session_state.selected_recipe_name
+    )
 
     st.markdown("**Ingredients & Raw Material Rates:**")
     st.caption(
@@ -407,11 +406,11 @@ with tab1:
   profit_per_kg = selling_price_per_kg - cost_per_kg
 
   with col_right:
-    st.subheader("📋 Output & Cost Summary")
+    st.subheader(f"📋 Output & Cost Summary ({recipe_name})")
     st.markdown(
         f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
+            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost ({recipe_name})</p>
             <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
             <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
             <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
@@ -451,7 +450,7 @@ with tab1:
     )
 
     st.download_button(
-        label="📥 Download Professional Excel Report (.xlsx)",
+        label=f"📥 Download Report for {recipe_name} (.xlsx)",
         data=excel_file_bytes,
         file_name=f"{recipe_name.replace(' ', '_')}_Costing_Sheet.xlsx",
         mime=(
@@ -463,7 +462,7 @@ with tab1:
 
 # ================= TAB 2: CALORIE & NUTRITION =================
 with tab2:
-  st.subheader("🥗 Nutritional & Calorie Breakdown")
+  st.subheader(f"🥗 Nutritional & Calorie Breakdown — {recipe_name}")
   st.caption(
       "Estimated nutritional values per ingredient based on standard food"
       " composition data (per 100g basis)."
@@ -512,7 +511,7 @@ with tab2:
   yield_fat_100g = total_batch_fat * per_100g_factor
   yield_carbs_100g = total_batch_carbs * per_100g_factor
 
-  st.markdown("### 📊 Summary Per 100g Finished Product")
+  st.markdown(f"### 📊 Summary Per 100g Finished Product ({recipe_name})")
   col_n1, col_n2, col_n3, col_n4 = st.columns(4)
   with col_n1:
     st.metric(label="Calories (Per 100g)", value=f"{yield_kcal_100g:.1f} kcal")
@@ -526,7 +525,7 @@ with tab2:
 
 # ================= TAB 3: AI CONSULTANT =================
 with tab3:
-  st.subheader("🤖 AI Chef & Production Consultant")
+  st.subheader(f"🤖 AI Chef & Production Consultant ({recipe_name})")
   st.caption(
       "Ask questions or attach handwritten recipe sheets, log photos, or"
       " documents for AI analysis."
@@ -541,8 +540,8 @@ with tab3:
   user_query = st.text_area(
       "Your Question",
       placeholder=(
-          "e.g., Analyze the attached recipe sheet and suggest how to reduce"
-          " moisture loss or optimize cost."
+          f"e.g., How to optimize production cost or reduce process loss for"
+          f" {recipe_name}?"
       ),
   )
 
