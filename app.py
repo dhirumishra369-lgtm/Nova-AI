@@ -40,6 +40,7 @@ NUTRIENTS_DB = {
     "pistachio": {"kcal": 562, "protein": 20.0, "fat": 45.0, "carbs": 28.0},
     "cardamom": {"kcal": 311, "protein": 11.0, "fat": 7.0, "carbs": 68.0},
     "silver vark": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
+    "salt": {"kcal": 0.0, "protein": 0.0, "fat": 0.0, "carbs": 0.0},
     "vanilla essence": {"kcal": 288, "protein": 0.1, "fat": 0.06, "carbs": 12.65},
 }
 
@@ -344,7 +345,6 @@ with tab1:
         def convert_to_kg(row):
           qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
           unit = str(row["Unit"]).strip().lower()
-          # Handle both grams (g, gram, grams) and milliliters (ml) by dividing by 1000
           if unit in ["g", "gram", "grams", "ml"]:
             return qty / 1000.0
           return qty
@@ -355,11 +355,20 @@ with tab1:
         rates = []
         for ing_name in recipe_df["Ingredient Name"]:
           clean_name = str(ing_name).strip().lower()
-          matched_rate = 500.0
-          for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-            if clean_name in p_desc or p_desc in clean_name:
-              matched_rate = p_cost
-              break
+          matched_rate = 500.0  # default fallback
+
+          # Special exact check for Salt to prevent matching "butter salted"
+          if clean_name == "salt":
+            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+              if "tata salt" in p_desc or p_desc == "salt":
+                matched_rate = p_cost
+                break
+          else:
+            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+              if clean_name in p_desc or p_desc in clean_name:
+                matched_rate = p_cost
+                break
+
           rates.append(matched_rate)
 
         recipe_df["Rate_Per_KG"] = rates
