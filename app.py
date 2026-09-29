@@ -31,11 +31,10 @@ NUTRIENTS_DB = {
 
 
 def get_nutrients(ingredient_name):
-  name_lower = ingredient_name.lower()
+  name_lower = str(ingredient_name).lower()
   for key, val in NUTRIENTS_DB.items():
     if key in name_lower:
       return val
-  # Default fallback for unlisted ingredients (e.g., standard flour/baking mix profile)
   return {"kcal": 400, "protein": 5.0, "fat": 10.0, "carbs": 70.0}
 
 
@@ -283,6 +282,38 @@ with tab1:
       " confectioneries, and bakeries."
   )
 
+  # Optional File Uploader for importing ingredient sheets (CSV/Excel)
+  with st.expander("📁 Import Ingredients from Excel / CSV File"):
+    uploaded_ingredient_file = st.file_uploader(
+        "Upload CSV or Excel file containing columns: Ingredient, Quantity_KG,"
+        " Rate_Per_KG",
+        type=["csv", "xlsx"],
+    )
+    if uploaded_ingredient_file is not None:
+      try:
+        if uploaded_ingredient_file.name.endswith(".csv"):
+          imported_df = pd.read_csv(uploaded_ingredient_file)
+        else:
+          imported_df = pd.read_excel(uploaded_ingredient_file)
+
+        if {"Ingredient", "Quantity_KG", "Rate_Per_KG"}.issubset(
+            imported_df.columns
+        ):
+          st.session_state.ingredients = imported_df[
+              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
+          ]
+          st.success(
+              "Ingredients successfully imported from file! Switch back to the"
+              " table to view."
+          )
+        else:
+          st.error(
+              "File must contain columns: 'Ingredient', 'Quantity_KG',"
+              " 'Rate_Per_KG'"
+          )
+      except Exception as e:
+        st.error(f"Error reading file: {e}")
+
   col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
   with col_left:
@@ -420,7 +451,6 @@ with tab2:
       " composition data (per 100g basis)."
   )
 
-  # Calculate nutrients
   nutri_rows = []
   total_batch_kcal = 0
   total_batch_protein = 0
@@ -433,7 +463,6 @@ with tab2:
     qty_g = qty_kg * 1000.0
 
     nutrients = get_nutrients(ing)
-    # values are per 100g, so multiply by (qty_g / 100)
     factor = qty_g / 100.0
     kcal = nutrients["kcal"] * factor
     protein = nutrients["protein"] * factor
@@ -457,7 +486,6 @@ with tab2:
   nutri_df = pd.DataFrame(nutri_rows)
   st.dataframe(nutri_df, use_container_width=True)
 
-  # Per 100g of finished product calculation based on final yield
   final_yield_g = final_yield_kg * 1000.0 if final_yield_kg > 0 else 1.0
   per_100g_factor = 100.0 / final_yield_g
 
@@ -482,25 +510,51 @@ with tab2:
 with tab3:
   st.subheader("🤖 AI Chef & Production Consultant")
   st.caption(
-      "Ask questions about recipe optimization, shelf-life improvement, process"
-      " loss reduction, or packaging tips."
+      "Ask questions or attach recipe photos, handwritten notes, or documents for"
+      " instant AI analysis."
+  )
+
+  # File attachment option for AI
+  uploaded_ai_file = st.file_uploader(
+      "Attach a photo (recipe/sheet) or document for AI review",
+      type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "xlsx"],
   )
 
   user_query = st.text_area(
       "Your Question",
       placeholder=(
-          "e.g., How can I reduce moisture loss below 12% in cashew fudge? Or"
-          " how do I extend shelf-life without chemical preservatives?"
+          "e.g., Analyze this attached production sheet or suggest how to reduce"
+          " moisture loss below 12%?"
       ),
   )
 
   if st.button("Ask AI Consultant", type="primary"):
-    if not user_query:
-      st.warning("Please type a question.")
+    if not user_query and not uploaded_ai_file:
+      st.warning(
+          "Please type a question or attach a file for the AI consultant."
+      )
     else:
       try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel("gemini-1.5-flash")
+
+        content_parts = []
+        # Handle file upload if present
+        if uploaded_ai_file is not None:
+          file_bytes = uploaded_ai_file.getvalue()
+          file_name = uploaded_ai_file.name
+          # If it's an image
+          if uploaded_ai_file.type.startswith("image/"):
+            content_parts.append({
+                "mime_type": uploaded_ai_file.type,
+                "data": file_bytes,
+            })
+          else:
+            # For text/spreadsheet data summary
+            content_parts.append(
+                f"[Attached File: {file_name}]\n(File content uploaded by user)"
+            )
+
         prompt = f"""
                 You are an expert commercial food technologist, chef, and bakery production consultant.
                 Current Product: {recipe_name}
@@ -510,15 +564,17 @@ with tab3:
                 Cost Per KG: ₹{cost_per_kg:.2f}
                 Estimated Energy: {yield_kcal_100g:.1f} kcal per 100g
 
-                User Query: {user_query}
+                User Query: {user_query if user_query else "Please analyze the attached document/image in the context of this batch production."}
                 Please provide practical, accurate, and scientifically backed commercial kitchen guidance.
                 """
-        with st.spinner("AI is analyzing your recipe..."):
-          response = model.generate_content(prompt)
+        content_parts.append(prompt)
+
+        with st.spinner("AI is analyzing your request and attachment..."):
+          response = model.generate_content(content_parts)
           st.success("Consultant Recommendation:")
           st.write(response.text)
       except Exception as e:
         st.error(
-            f"Configuration Error: Please ensure GOOGLE_API_KEY is set in your"
-            f" Streamlit secrets. Details: {e}"
+            f"Configuration or Processing Error: Please ensure"
+            f" GOOGLE_API_KEY is configured in Streamlit secrets. Details: {e}"
         )
