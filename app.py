@@ -1,7 +1,9 @@
 import datetime
 import io
+import google.generativeai as genai
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from PIL import Image
 import pandas as pd
 import streamlit as st
 
@@ -282,9 +284,10 @@ def generate_professional_excel(
 
 
 # ----------------- UI TABS SETUP -----------------
-tab1, tab2 = st.tabs([
-    "📊 Recipe Costing, Yield & Pricing",
-    "🥗 Calorie & Nutrition Breakdown",
+tab1, tab2, tab3 = st.tabs([
+    "📊 Recipe Costing & Yield",
+    "🥗 Calorie & Nutrition",
+    "🤖 AI Chef & Consultant",
 ])
 
 # ================= TAB 1: CALCULATOR =================
@@ -596,3 +599,93 @@ with tab2:
     st.metric(label="Total Fat", value=f"{yield_fat_100g:.1f} g")
   with col_n4:
     st.metric(label="Carbohydrates", value=f"{yield_carbs_100g:.1f} g")
+
+
+# ================= TAB 3: AI CONSULTANT =================
+with tab3:
+  st.subheader(f"🤖 AI Chef & Production Consultant — {recipe_name}")
+  st.caption(
+      "Ask questions or attach handwritten recipe sheets, log photos, or"
+      " documents for AI analysis."
+  )
+
+  # Secure API Key handling with fallback input box if secrets.toml is missing
+  gemini_api_key = None
+  try:
+    gemint_api_key = st.secrets["GOOGLE_API_KEY"]
+  except Exception:
+    gemini_api_key = st.text_input(
+        "Enter Gemini API Key", type="password", key="fallback_api_key"
+    )
+
+  uploaded_ai_file = st.file_uploader(
+      "Attach Production Log / Recipe Image / Document (Optional)",
+      type=["png", "jpg", "jpeg", "pdf", "txt", "csv", "xlsx"],
+      key="ai_file_uploader",
+  )
+
+  user_query = st.text_area(
+      "Your Question",
+      placeholder=(
+          f"e.g., How can I optimize costs or reduce process loss for"
+          f" {recipe_name}?"
+      ),
+  )
+
+  if st.button("Ask AI Consultant", type="primary"):
+    # Determine API key from secrets or fallback
+    api_to_use = None
+    try:
+      api_to_use = st.secrets.get("GOOGLE_API_KEY")
+    except Exception:
+      pass
+
+    if not api_to_use:
+      api_to_use = locals().get("gemini_api_key") or st.session_state.get(
+          "fallback_api_key"
+      )
+
+    if not api_to_use:
+      st.warning(
+          "Please configure GOOGLE_API_KEY in secrets.toml or enter it above."
+      )
+    elif not user_query and not uploaded_ai_file:
+      st.warning("Please type a question or attach a file.")
+    else:
+      try:
+        genai.configure(api_key=api_to_use)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        content_parts = []
+        if uploaded_ai_file is not None:
+          if uploaded_ai_file.type.startswith("image/"):
+            img = Image.open(uploaded_ai_file)
+            content_parts.append(img)
+          elif uploaded_ai_file.type in [
+              "text/plain",
+              "text/csv",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          ]:
+            file_bytes = uploaded_ai_file.getvalue()
+            content_parts.append(file_bytes.decode("utf-8", errors="ignore"))
+
+        prompt = f"""
+                You are an expert commercial food technologist, chef, and bakery production consultant.
+                Product: {recipe_name}
+                Raw Material Batch Weight: {raw_material_weight:.2f} kg
+                Process Loss: {loss_percent}%
+                Final Output Yield: {final_yield_kg:.2f} kg
+                Cost Per KG: ₹{cost_per_kg:.2f}
+                Estimated Energy: {yield_kcal_100g:.1f} kcal per 100g
+
+                User Query: {user_query}
+                Please provide practical, accurate, and scientifically backed commercial kitchen guidance for this specific recipe.
+                """
+        content_parts.append(prompt)
+
+        with st.spinner("AI is analyzing your recipe and attached file..."):
+          response = model.generate_content(content_parts)
+          st.success("Consultant Recommendation:")
+          st.write(response.text)
+      except Exception as e:
+        st.error(f"API Execution Error. Details: {e}")
