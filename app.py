@@ -295,7 +295,6 @@ with tab1:
       " Price List integration."
   )
 
-  # Sidebar/Expander for Price List & Master Recipes
   col_up1, col_up2 = st.columns(2)
   with col_up1:
     uploaded_master_file = st.file_uploader(
@@ -313,7 +312,6 @@ with tab1:
     if uploaded_price_file is not None:
       try:
         price_df = pd.read_excel(uploaded_price_file)
-        # Create mapping dictionary {Description.lower(): Unit Cost}
         price_map = {}
         for _, row in price_df.iterrows():
           desc = str(row.get("Description", "")).strip().lower()
@@ -352,12 +350,10 @@ with tab1:
         recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
         recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
 
-        # Fetch rate automatically from loaded price list if available, else fallback to 500
         rates = []
         for ing_name in recipe_df["Ingredient Name"]:
           clean_name = str(ing_name).strip().lower()
-          matched_rate = 500.0  # default fallback
-          # Search in loaded price list
+          matched_rate = 500.0
           for p_desc, p_cost in st.session_state.price_lookup_dict.items():
             if clean_name in p_desc or p_desc in clean_name:
               matched_rate = p_cost
@@ -372,7 +368,7 @@ with tab1:
         st.session_state.recipe_title = chosen_sheet
 
       selected_sheet = st.selectbox(
-          "Select Recipe Sheet to Load (Auto-updates Cost & Rates)",
+          "Select Recipe Sheet to Load",
           sheet_options,
           key="recipe_dropdown",
           on_change=on_recipe_select,
@@ -439,10 +435,13 @@ with tab1:
         step=1.0,
     )
 
+  # Calculations
   clean_df = edited_df.dropna(subset=["Quantity_KG", "Rate_Per_KG"]).copy()
   raw_material_weight = clean_df["Quantity_KG"].sum()
-  clean_df["Cost"] = clean_df["Quantity_KG"] * clean_df["Rate_Per_KG"]
-  raw_material_cost = clean_df["Cost"].sum()
+  clean_df["Total Amount (₹)"] = (
+      clean_df["Quantity_KG"] * clean_df["Rate_Per_KG"]
+  )
+  raw_material_cost = clean_df["Total Amount (₹)"].sum()
 
   final_yield_kg = raw_material_weight * (1 - (loss_percent / 100.0))
   total_batch_cost = raw_material_cost + labor_gas_cost + packaging_cost
@@ -459,15 +458,31 @@ with tab1:
 
   with col_right:
     st.subheader("📋 Output & Cost Summary")
+
+    # Display Ingredient-wise Total Value Breakdown Table
+    st.markdown("**Ingredient-wise Total Cost Breakdown:**")
+    display_summary_df = clean_df[
+        ["Ingredient", "Quantity_KG", "Rate_Per_KG", "Total Amount (₹)"]
+    ].copy()
+    display_summary_df.columns = [
+        "Ingredient",
+        "Qty (KG)",
+        "Rate/KG (₹)",
+        "Total (₹)",
+    ]
+    st.dataframe(display_summary_df, use_container_width=True, hide_index=True)
+
     st.markdown(
         f"""
         <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
             <p style="margin:0; font-size:14px; color:#64748B;">Selected Recipe: <b>{recipe_name}</b></p>
             <hr style="margin: 10px 0; border: 0; border-top: 1px solid #E2E8F0;">
-            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost</p>
-            <h2 style="margin:0 0 15px 0; color:#0F172A; font-size:32px;">₹{total_batch_cost:,.2f}</h2>
+            <p style="margin:0; font-size:14px; color:#64748B;">Total Raw Material Cost</p>
+            <h3 style="margin:0 0 10px 0; color:#0F172A; font-size:24px;">₹{raw_material_cost:,.2f}</h3>
+            <p style="margin:0; font-size:14px; color:#64748B;">Total Batch Cost (with Overheads)</p>
+            <h2 style="margin:0 0 15px 0; color:#1E3A8A; font-size:30px;">₹{total_batch_cost:,.2f}</h2>
             <p style="margin:0; font-size:14px; color:#64748B;">Final Net Yield</p>
-            <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:26px;">{final_yield_kg:,.2f} KG</h3>
+            <h3 style="margin:0 0 5px 0; color:#1E293B; font-size:24px;">{final_yield_kg:,.2f} KG</h3>
             <span style="color:#DC2626; font-size:13px; font-weight:600;">↓ {loss_percent}% Process Loss</span>
             <hr style="margin: 15px 0; border: 0; border-top: 1px solid #E2E8F0;">
             <div style="display: flex; justify-content: space-between;">
