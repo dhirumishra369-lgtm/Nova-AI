@@ -73,6 +73,7 @@ def generate_professional_excel(
   ws.title = "Costing & Yield Report"
   ws.views.sheetView[0].showGridLines = True
 
+  # Title Banner
   ws.merge_cells("A1:E1")
   title = ws["A1"]
   title.value = "RECIPE COSTING & BATCH YIELD REPORT"
@@ -83,6 +84,7 @@ def generate_professional_excel(
   title.alignment = Alignment(horizontal="center", vertical="center")
   ws.row_dimensions[1].height = 35
 
+  # Metadata Row
   ws["A2"] = "Product / Recipe:"
   ws["B2"] = recipe_name
   ws["D2"] = "Date:"
@@ -93,6 +95,7 @@ def generate_professional_excel(
   ws["E2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
   ws.row_dimensions[2].height = 22
 
+  # Section 1 Header: Raw Material
   ws.merge_cells("A4:E4")
   sec1 = ws["A4"]
   sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
