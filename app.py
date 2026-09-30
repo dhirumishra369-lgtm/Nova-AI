@@ -186,6 +186,7 @@ def generate_professional_excel(
         start_color="EFF6FF", end_color="EFF6FF", fill_type="solid"
     )
 
+  # Section 2 Header: Summary
   sum_start = tot_r + 2
   ws.merge_cells(f"A{sum_start}:E{sum_start}")
   sec2 = ws[f"A{sum_start}"]
@@ -361,6 +362,7 @@ with tab1:
                 matched_rate = p_cost
                 break
           elif "badam" in clean_name or "almond" in clean_name:
+            # Match directly with "almond factory" from price list
             for p_desc, p_cost in st.session_state.price_lookup_dict.items():
               if "almond factory" in p_desc or "badam factory" in p_desc:
                 matched_rate = p_cost
@@ -453,6 +455,7 @@ with tab1:
         step=1.0,
     )
 
+  # Calculations
   clean_df = edited_df.dropna(subset=["Quantity_KG", "Rate_Per_KG"]).copy()
   raw_material_weight = clean_df["Quantity_KG"].sum()
   clean_df["Total Amount (₹)"] = (
