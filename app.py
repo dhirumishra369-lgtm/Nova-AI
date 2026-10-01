@@ -9,7 +9,7 @@ st.set_page_config(
     page_title="Recipe Costing & Yield Calculator", page_icon="🍰", layout="wide"
 )
 
-# ----------------- SESSION STATE & SETUP -----------------
+# ----------------- PERSISTENT SESSION STATE SETUP -----------------
 if "ingredients" not in st.session_state:
   st.session_state.ingredients = pd.DataFrame([
       {"Ingredient": "Kaju (Cashew)", "Quantity_KG": 5.0, "Rate_Per_KG": 680.0},
@@ -73,7 +73,6 @@ def generate_professional_excel(
   ws.title = "Costing & Yield Report"
   ws.views.sheetView[0].showGridLines = True
 
-  # Title Banner
   ws.merge_cells("A1:E1")
   title = ws["A1"]
   title.value = "RECIPE COSTING & BATCH YIELD REPORT"
@@ -84,7 +83,6 @@ def generate_professional_excel(
   title.alignment = Alignment(horizontal="center", vertical="center")
   ws.row_dimensions[1].height = 35
 
-  # Metadata Row
   ws["A2"] = "Product / Recipe:"
   ws["B2"] = recipe_name
   ws["D2"] = "Date:"
@@ -95,7 +93,6 @@ def generate_professional_excel(
   ws["E2"].font = Font(name="Calibri", size=11, bold=True, color="111827")
   ws.row_dimensions[2].height = 22
 
-  # Section 1 Header: Raw Material
   ws.merge_cells("A4:E4")
   sec1 = ws["A4"]
   sec1.value = "1. RAW MATERIAL & INGREDIENT BREAKDOWN"
@@ -186,7 +183,6 @@ def generate_professional_excel(
         start_color="EFF6FF", end_color="EFF6FF", fill_type="solid"
     )
 
-  # Section 2 Header: Summary
   sum_start = tot_r + 2
   ws.merge_cells(f"A{sum_start}:E{sum_start}")
   sec2 = ws[f"A{sum_start}"]
@@ -284,9 +280,10 @@ def generate_professional_excel(
 
 
 # ----------------- UI TABS SETUP -----------------
-tab1, tab2 = st.tabs([
-    "📊 Recipe Costing, Yield & Pricing",
-    "🥗 Calorie & Nutrition Breakdown",
+tab1, tab2, tab3 = st.tabs([
+    "📊 Recipe Costing & Yield",
+    "🥗 Calorie & Nutrition",
+    "📈 30-Day Production & RM Ledger",
 ])
 
 # ================= TAB 1: CALCULATOR =================
@@ -333,59 +330,61 @@ with tab1:
 
 
       def on_recipe_select():
-        chosen_sheet = st.session_state.recipe_dropdown
-        recipe_df = pd.read_excel(
-            st.session_state.master_excel_data,
-            sheet_name=chosen_sheet,
-            header=2,
-        )
-        recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
+        try:
+          chosen_sheet = st.session_state.recipe_dropdown
+          recipe_df = pd.read_excel(
+              st.session_state.master_excel_data,
+              sheet_name=chosen_sheet,
+              header=2,
+          )
+          recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
 
-        def convert_to_kg(row):
-          qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
-          unit = str(row["Unit"]).strip().lower()
-          if unit in ["g", "gram", "grams", "ml"]:
-            return qty / 1000.0
-          return qty
+          def convert_to_kg(row):
+            qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
+            unit = str(row["Unit"]).strip().lower()
+            if unit in ["g", "gram", "grams", "ml"]:
+              return qty / 1000.0
+            return qty
 
-        recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
-        recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
+          recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
+          recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
 
-        rates = []
-        for ing_name in recipe_df["Ingredient Name"]:
-          clean_name = str(ing_name).strip().lower()
-          matched_rate = 500.0
+          rates = []
+          for ing_name in recipe_df["Ingredient Name"]:
+            clean_name = str(ing_name).strip().lower()
+            matched_rate = 500.0
 
-          if clean_name == "salt":
-            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-              if "tata salt" in p_desc or p_desc == "salt":
-                matched_rate = p_cost
-                break
-          elif "badam" in clean_name or "almond" in clean_name:
-            # Match directly with "almond factory" from price list
-            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-              if "almond factory" in p_desc or "badam factory" in p_desc:
-                matched_rate = p_cost
-                break
-            if matched_rate == 500.0:
+            if clean_name == "salt":
               for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-                if "almond" in p_desc or "badam" in p_desc:
+                if "tata salt" in p_desc or p_desc == "salt":
                   matched_rate = p_cost
                   break
-          else:
-            for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-              if clean_name in p_desc or p_desc in clean_name:
-                matched_rate = p_cost
-                break
+            elif "badam" in clean_name or "almond" in clean_name:
+              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+                if "almond factory" in p_desc or "badam factory" in p_desc:
+                  matched_rate = p_cost
+                  break
+              if matched_rate == 500.0:
+                for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+                  if "almond" in p_desc or "badam" in p_desc:
+                    matched_rate = p_cost
+                    break
+            else:
+              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
+                if clean_name in p_desc or p_desc in clean_name:
+                  matched_rate = p_cost
+                  break
 
-          rates.append(matched_rate)
+            rates.append(matched_rate)
 
-        recipe_df["Rate_Per_KG"] = rates
+          recipe_df["Rate_Per_KG"] = rates
 
-        st.session_state.ingredients = recipe_df[
-            ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
-        ].reset_index(drop=True)
-        st.session_state.recipe_title = chosen_sheet
+          st.session_state.ingredients = recipe_df[
+              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
+          ].reset_index(drop=True)
+          st.session_state.recipe_title = chosen_sheet
+        except Exception as ex:
+          st.error(f"Error loading recipe sheet: {ex}")
 
       selected_sheet = st.selectbox(
           "Select Recipe Sheet to Load",
@@ -455,7 +454,6 @@ with tab1:
         step=1.0,
     )
 
-  # Calculations
   clean_df = edited_df.dropna(subset=["Quantity_KG", "Rate_Per_KG"]).copy()
   raw_material_weight = clean_df["Quantity_KG"].sum()
   clean_df["Total Amount (₹)"] = (
@@ -609,3 +607,83 @@ with tab2:
     st.metric(label="Total Fat", value=f"{yield_fat_100g:.1f} g")
   with col_n4:
     st.metric(label="Carbohydrates", value=f"{yield_carbs_100g:.1f} g")
+
+
+# ================= TAB 3: 30-DAY PRODUCTION & RM LEDGER =================
+with tab3:
+  st.subheader("📈 30-Day Monthly Production, RM Issue & Dispatch Ledger")
+  st.caption(
+      "Upload your Monthly RM Issue log and Finished Goods (FG) production /"
+      " dispatch sheets. All uploaded state is auto-saved in your active"
+      " session."
+  )
+
+  col_l3_1, col_l3_2 = st.columns(2)
+  with col_l3_1:
+    monthly_rm_file = st.file_uploader(
+        "Upload Monthly RM Issue Sheet (.xlsx)",
+        type=["xlsx"],
+        key="monthly_rm",
+    )
+    if monthly_rm_file is not None:
+      st.session_state.saved_rm_file = monthly_rm_file
+
+  with col_l3_2:
+    monthly_fg_file = st.file_uploader(
+        "Upload Monthly Finished Goods / Dispatch Sheet (.xlsx)",
+        type=["xlsx"],
+        key="monthly_fg",
+    )
+    if monthly_fg_file is not None:
+      st.session_state.saved_fg_file = monthly_fg_file
+
+  active_rm = monthly_rm_file or st.session_state.get("saved_rm_file")
+  active_fg = monthly_fg_file or st.session_state.get("saved_fg_file")
+
+  if active_rm is not None and active_fg is not None:
+    try:
+      df_rm_log = pd.read_excel(active_rm)
+      df_fg_log = pd.read_excel(active_fg)
+
+      st.success(
+          "Files are active and safely retained in memory across your session!"
+      )
+
+      st.markdown("### 🔍 Preview of Active Data")
+      c_prev1, c_prev2 = st.columns(2)
+      with c_prev1:
+        st.markdown("**RM Issue Log Preview:**")
+        st.dataframe(df_rm_log.head(5), use_container_width=True)
+      with c_prev2:
+        st.markdown("**FG Production & Dispatch Log Preview:**")
+        st.dataframe(df_fg_log.head(5), use_container_width=True)
+
+      def generate_monthly_ledger_excel(rm_df, fg_df):
+        out = io.BytesIO()
+        with pd.ExcelWriter(out, engine="openpyxl") as writer:
+          rm_df.to_excel(writer, sheet_name="Daily RM Issue Report", index=False)
+          fg_df.to_excel(
+              writer, sheet_name="Daily Production & Dispatch", index=False
+          )
+        return out.getvalue()
+
+      monthly_excel_bytes = generate_monthly_ledger_excel(df_rm_log, df_fg_log)
+
+      st.download_button(
+          label="📥 Download Complete 30-Day Monthly Ledger Report (.xlsx)",
+          data=monthly_excel_bytes,
+          file_name=f"Monthly_Production_RM_Ledger_{datetime.date.today().strftime('%B_%Y')}.xlsx",
+          mime=(
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ),
+          use_container_width=True,
+      )
+
+    except Exception as e:
+      st.error(f"Error processing saved monthly ledger files: {e}")
+  else:
+    st.info(
+        "👆 Please upload both the RM Issue sheet and Finished Goods sheet above"
+        " to generate the 30-day comprehensive report. Your data will be"
+        " securely retained."
+    )
