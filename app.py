@@ -9,7 +9,11 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 import pandas as pd
-import plotly.express as px
+try:
+    import plotly.express as px
+    HAS_PLOTLY = True
+except ImportError:
+    HAS_PLOTLY = False
 import streamlit as st
 
 st.set_page_config(
@@ -916,16 +920,20 @@ st.download_button(
 
 ch1, ch2 = st.columns(2)
 with ch1:
-    fig1 = px.bar(
-        valid_df,
-        x="Ingredient",
-        y="Total_Cost",
-        color="Total_Cost",
-        title=f"💰 Ingredient Cost Breakdown — {selected_recipe}",
-        color_continuous_scale="Turbo",
-        height=350,
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+    if HAS_PLOTLY:
+        fig1 = px.bar(
+            valid_df,
+            x="Ingredient",
+            y="Total_Cost",
+            color="Total_Cost",
+            title=f"💰 Ingredient Cost Breakdown — {selected_recipe}",
+            color_continuous_scale="Turbo",
+            height=350,
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.markdown(f"#### 💰 Ingredient Cost Breakdown — {selected_recipe}")
+        st.bar_chart(valid_df.set_index("Ingredient")["Total_Cost"])
 
 with ch2:
     st.markdown("#### 💰 Uploaded Rate List Sheet (Live Editable)")
