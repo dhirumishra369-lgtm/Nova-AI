@@ -21,8 +21,8 @@ if "ingredients" not in st.session_state:
 if "recipe_title" not in st.session_state:
   st.session_state.recipe_title = "Premium Kaju Katli"
 
-if "master_excel_data" not in st.session_state:
-  st.session_state.master_excel_data = None
+if "master_excel_files" not in st.session_state:
+  st.session_state.master_excel_files = []
 
 if "price_lookup_dict" not in st.session_state:
   st.session_state.price_lookup_dict = {}
@@ -51,6 +51,53 @@ def get_nutrients(ingredient_name):
     if key in name_lower:
       return val
   return {"kcal": 400, "protein": 5.0, "fat": 10.0, "carbs": 70.0}
+
+
+def match_rate_from_lookup(ing_name, price_lookup):
+  clean_name = str(ing_name).strip().lower()
+  matched_rate = 500.0
+  if not price_lookup:
+    return matched_rate
+
+  if clean_name == "salt":
+    for p_desc, p_cost in price_lookup.items():
+      if "tata salt" in p_desc or p_desc == "salt":
+        return p_cost
+  elif "badam" in clean_name or "almond" in clean_name:
+    for p_desc, p_cost in price_lookup.items():
+      if "almond factory" in p_desc or "badam factory" in p_desc:
+        return p_cost
+    for p_desc, p_cost in price_lookup.items():
+      if "almond" in p_desc or "badam" in p_desc:
+        return p_cost
+  else:
+    for p_desc, p_cost in price_lookup.items():
+      if clean_name in p_desc or p_desc in clean_name:
+        return p_cost
+  return matched_rate
+
+
+def load_recipe_from_excel(file_obj, sheet_name, price_lookup):
+  file_obj.seek(0)
+  recipe_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=2)
+  recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
+
+  def convert_to_kg(row):
+    qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
+    unit = str(row["Unit"]).strip().lower()
+    if unit in ["g", "gram", "grams", "ml"]:
+      return qty / 1000.0
+    return qty
+
+  recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
+  recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
+  recipe_df["Rate_Per_KG"] = [
+      match_rate_from_lookup(name, price_lookup)
+      for name in recipe_df["Ingredient Name"]
+  ]
+  return recipe_df[["Ingredient", "Quantity_KG", "Rate_Per_KG"]].reset_index(
+      drop=True
+  )
 
 
 # ----------------- PROFESSIONAL EXCEL GENERATORS -----------------
@@ -388,120 +435,145 @@ def generate_monthly_master_template():
   return out.getvalue()
 
 
+def build_merged_excel_bytes(merged_df, sheet_tabs_dict):
+  wb = openpyxl.Workbook()
+  ws_all = wb.active
+  ws_all.title = "Merged_All_Data"
+  ws_all.views.sheetView[0].showGridLines = True
+
+  hdr_fill = PatternFill(
+      start_color="1E3A8A", end_color="1E3A8A", fill_type="solid"
+  )
+  hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+  if not merged_df.empty:
+    ws_all.append(list(merged_df.columns))
+    ws_all.row_dimensions[1].height = 24
+    for col_i in range(1, len(merged_df.columns) + 1):
+      cell = ws_all.cell(row=1, column=col_i)
+      cell.fill = hdr_fill
+      cell.font = hdr_font
+      cell.alignment = Alignment(horizontal="center", vertical="center")
+    for _, r_data in merged_df.iterrows():
+      ws_all.append(
+          [None if pd.isna(v) else v for v in r_data.tolist()]
+      )
+
+  for tab_title, df_part in sheet_tabs_dict.items():
+    safe_title = re.sub(r"[\[\]:*?/\\]", "_", str(tab_title))[:31] or "Sheet"
+    if safe_title in wb.sheetnames:
+      safe_title = f"{safe_title[:26]}_{len(wb.sheetnames)}"
+    ws_p = wb.create_sheet(title=safe_title)
+    ws_p.views.sheetView[0].showGridLines = True
+    if not df_part.empty:
+      ws_p.append(list(df_part.columns))
+      for col_i in range(1, len(df_part.columns) + 1):
+        c = ws_p.cell(row=1, column=col_i)
+        c.fill = hdr_fill
+        c.font = hdr_font
+      for _, r_data in df_part.iterrows():
+        ws_p.append(
+            [None if pd.isna(v) else v for v in r_data.tolist()]
+        )
+
+  for sheet in wb.worksheets:
+    for col in sheet.columns:
+      max_len = max(
+          (len(str(cell.value or "")) for cell in list(col)[:50]), default=12
+      )
+      col_letter = openpyxl.utils.get_column_letter(col[0].column)
+      sheet.column_dimensions[col_letter].width = min(max(max_len + 4, 14), 45)
+
+  out = io.BytesIO()
+  wb.save(out)
+  return out.getvalue()
+
+
 # ----------------- UI TABS SETUP -----------------
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Recipe Costing & Yield",
     "🥗 Calorie & Nutrition",
     "📈 30-Day Master Ledger & Templates",
+    "📦 Multi-Excel Batch Upload & Merge",
 ])
 
 # ================= TAB 1: CALCULATOR =================
 with tab1:
   st.caption(
-      "Precise cost, batch yield, and margin analysis with automatic Master"
-      " Price List integration."
+      "Precise cost, batch yield, and margin analysis with multi-file Master"
+      " Recipe & Price List support."
   )
 
   col_up1, col_up2 = st.columns(2)
   with col_up1:
-    uploaded_master_file = st.file_uploader(
-        "1. Upload Master Recipe Collection (.xlsx)",
+    uploaded_master_files = st.file_uploader(
+        "1. Upload One or More Master Recipe Files (.xlsx)",
         type=["xlsx"],
-        key="master_file",
+        accept_multiple_files=True,
+        key="master_files_multi",
     )
-    if uploaded_master_file is not None:
-      st.session_state.master_excel_data = uploaded_master_file
+    if uploaded_master_files:
+      st.session_state.master_excel_files = uploaded_master_files
 
   with col_up2:
-    uploaded_price_file = st.file_uploader(
-        "2. Upload Bakery Price List (.xlsx)", type=["xlsx"], key="price_file"
+    uploaded_price_files = st.file_uploader(
+        "2. Upload One or More Bakery Price Lists (.xlsx)",
+        type=["xlsx"],
+        accept_multiple_files=True,
+        key="price_files_multi",
     )
-    if uploaded_price_file is not None:
+    if uploaded_price_files:
       try:
-        price_df = pd.read_excel(uploaded_price_file)
         price_map = {}
-        for _, row in price_df.iterrows():
-          desc = str(row.get("Description", "")).strip().lower()
-          cost = float(row.get("Unit Cost", 0.0))
-          if desc:
-            price_map[desc] = cost
+        for pf in uploaded_price_files:
+          pf.seek(0)
+          price_df = pd.read_excel(pf)
+          for _, row in price_df.iterrows():
+            desc = str(row.get("Description", "")).strip().lower()
+            cost = float(row.get("Unit Cost", 0.0) or 0.0)
+            if desc:
+              price_map[desc] = cost
         st.session_state.price_lookup_dict = price_map
         st.success(
-            f"Price list loaded successfully ({len(price_map)} items mapped)!"
+            f"Loaded {len(uploaded_price_files)} price file(s) ({len(price_map)} items mapped)!"
         )
       except Exception as e:
-        st.error(f"Error loading price list: {e}")
+        st.error(f"Error loading price list(s): {e}")
 
-  if st.session_state.master_excel_data is not None:
+  if st.session_state.master_excel_files:
     try:
-      xls = pd.ExcelFile(st.session_state.master_excel_data)
-      sheet_options = [s for s in xls.sheet_names if s != "Master Summary"]
+      recipe_choices = {}
+      for mf in st.session_state.master_excel_files:
+        mf.seek(0)
+        xls = pd.ExcelFile(mf)
+        for s in xls.sheet_names:
+          if s != "Master Summary":
+            display_key = (
+                f"{s}"
+                if len(st.session_state.master_excel_files) == 1
+                else f"[{mf.name}] {s}"
+            )
+            recipe_choices[display_key] = (mf, s)
 
       def on_recipe_select():
         try:
-          chosen_sheet = st.session_state.recipe_dropdown
-          recipe_df = pd.read_excel(
-              st.session_state.master_excel_data,
-              sheet_name=chosen_sheet,
-              header=2,
+          chosen_key = st.session_state.recipe_dropdown
+          mf_obj, chosen_sheet = recipe_choices[chosen_key]
+          st.session_state.ingredients = load_recipe_from_excel(
+              mf_obj, chosen_sheet, st.session_state.price_lookup_dict
           )
-          recipe_df = recipe_df.dropna(subset=["Ingredient Name"])
-
-          def convert_to_kg(row):
-            qty = float(row["Base Qty"]) if pd.notnull(row["Base Qty"]) else 0.0
-            unit = str(row["Unit"]).strip().lower()
-            if unit in ["g", "gram", "grams", "ml"]:
-              return qty / 1000.0
-            return qty
-
-          recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
-          recipe_df["Ingredient"] = recipe_df["Ingredient Name"]
-
-          rates = []
-          for ing_name in recipe_df["Ingredient Name"]:
-            clean_name = str(ing_name).strip().lower()
-            matched_rate = 500.0
-
-            if clean_name == "salt":
-              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-                if "tata salt" in p_desc or p_desc == "salt":
-                  matched_rate = p_cost
-                  break
-            elif "badam" in clean_name or "almond" in clean_name:
-              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-                if "almond factory" in p_desc or "badam factory" in p_desc:
-                  matched_rate = p_cost
-                  break
-              if matched_rate == 500.0:
-                for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-                  if "almond" in p_desc or "badam" in p_desc:
-                    matched_rate = p_cost
-                    break
-            else:
-              for p_desc, p_cost in st.session_state.price_lookup_dict.items():
-                if clean_name in p_desc or p_desc in clean_name:
-                  matched_rate = p_cost
-                  break
-
-            rates.append(matched_rate)
-
-          recipe_df["Rate_Per_KG"] = rates
-
-          st.session_state.ingredients = recipe_df[
-              ["Ingredient", "Quantity_KG", "Rate_Per_KG"]
-          ].reset_index(drop=True)
           st.session_state.recipe_title = chosen_sheet
         except Exception as ex:
           st.error(f"Error loading recipe sheet: {ex}")
 
-      selected_sheet = st.selectbox(
-          "Select Recipe Sheet to Load",
-          sheet_options,
+      st.selectbox(
+          "Select Recipe Sheet to Load (Across All Uploaded Files)",
+          list(recipe_choices.keys()),
           key="recipe_dropdown",
           on_change=on_recipe_select,
       )
     except Exception as e:
-      st.error(f"Error reading master file: {e}")
+      st.error(f"Error reading master file(s): {e}")
 
   col_left, col_right = st.columns([1.1, 0.9], gap="large")
 
@@ -754,3 +826,56 @@ with tab3:
       "3. **Master 30-Day Report Tab**: Get automatic item-wise and date-wise"
       " summaries for the entire month."
   )
+
+
+# ================= TAB 4: MULTI-EXCEL BATCH UPLOAD & MERGE =================
+with tab4:
+  st.subheader("📦 Add Multiple Excel Files Together & Merge")
+  st.caption(
+      "Select 2 or more .xlsx files at once to preview all sheets, combine rows,"
+      " and download a single merged Excel workbook."
+  )
+
+  bulk_files = st.file_uploader(
+      "Select Multiple Excel Files (.xlsx)",
+      type=["xlsx"],
+      accept_multiple_files=True,
+      key="bulk_excel_files",
+  )
+
+  if bulk_files:
+    all_frames = []
+    sheet_tabs = {}
+    for f_item in bulk_files:
+      f_item.seek(0)
+      xl_obj = pd.ExcelFile(f_item)
+      for sh_name in xl_obj.sheet_names:
+        f_item.seek(0)
+        df_sh = pd.read_excel(f_item, sheet_name=sh_name)
+        if df_sh.empty:
+          continue
+        df_sh = df_sh.copy()
+        df_sh.insert(0, "Source_Sheet", sh_name)
+        df_sh.insert(0, "Source_File", f_item.name)
+        all_frames.append(df_sh)
+        sheet_tabs[f"{f_item.name[:12]}_{sh_name[:15]}"] = df_sh
+
+    if all_frames:
+      combined_df = pd.concat(all_frames, ignore_index=True)
+      st.success(
+          f"{len(bulk_files)} file(s) loaded • {len(all_frames)} sheet(s) • {len(combined_df)} total rows"
+      )
+      st.dataframe(combined_df.head(200), use_container_width=True)
+
+      merged_bytes = build_merged_excel_bytes(combined_df, sheet_tabs)
+      st.download_button(
+          label="📥 Download Merged Excel Workbook (.xlsx)",
+          data=merged_bytes,
+          file_name=(
+              f"Merged_Production_Files_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+          ),
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          use_container_width=True,
+      )
+    else:
+      st.warning("Uploaded Excel files have no readable rows.")
