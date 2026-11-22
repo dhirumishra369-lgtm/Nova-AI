@@ -411,7 +411,7 @@ def generate_super_colorful_excel(recipe_book, price_df, mrp_mult=4.0, oh_pct=0.
     ws_sel["H5"].font = f_dd
     ws_sel["H5"].fill = PatternFill("solid", fgColor="FEF08A")
     ws_sel["H5"].alignment = Alignment(horizontal="center", vertical="center")
-    ws_sel["H5"].number_format = "0.0"x""
+    ws_sel["H5"].number_format = '0.0"x"'
     ws_sel["H5"].border = b_dd
 
     ws_sel["I5"] = "Overhead %:"
