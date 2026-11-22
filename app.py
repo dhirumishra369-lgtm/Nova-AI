@@ -1,70 +1,73 @@
-def load_recipe_from_excel(file_obj, sheet_name, price_lookup):
-  file_obj.seek(0)
-  # Pehle bina header ke padh kar 'Ingredient' ya 'Item' wali header row dhoondein
-  raw_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=None)
+import datetime
+import io
+import openpyxl
+import pandas as pd
+import streamlit as st
 
-  header_row_idx = None
-  ing_col_name = None
-  qty_col_name = None
-  unit_col_name = None
+st.set_page_config(page_title="Nova-AI", page_icon="🍰", layout="wide")
 
-  for r_idx, row in raw_df.iterrows():
-    row_vals = [str(v).strip() for v in row.tolist() if pd.notnull(v)]
-    lower_map = {str(v).strip().lower(): str(v).strip() for v in row.tolist() if pd.notnull(v)}
-    if any("ingredient" in k or "item" in k for k in lower_map):
-      header_row_idx = r_idx
-      for k, orig in lower_map.items():
-        if "ingredient" in k or ("item" in k and not ing_col_name):
-          ing_col_name = orig
-        if "qty" in k or "quantity" in k or "base" in k:
-          qty_col_name = orig
-        if "unit" in k or "uom" in k:
-          unit_col_name = orig
-      break
+st.title("🍰 Nova-AI — Recipe Costing & Yield")
+st.caption("App status: Online & Running")
 
-  file_obj.seek(0)
-  if header_row_idx is not None and ing_col_name:
-    recipe_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=header_row_idx)
-  else:
-    recipe_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=2)
-    ing_col_name = "Ingredient Name" if "Ingredient Name" in recipe_df.columns else recipe_df.columns[0]
+if "df" not in st.session_state:
+  st.session_state.df = pd.DataFrame([
+      {"Ingredient": "Kaju", "Qty_KG": 5.0, "Rate_KG": 680.0},
+      {"Ingredient": "Sugar", "Qty_KG": 8.0, "Rate_KG": 42.0},
+  ])
 
-  recipe_df = recipe_df.dropna(how="all")
-  if ing_col_name in recipe_df.columns:
-    recipe_df = recipe_df.dropna(subset=[ing_col_name])
-  else:
-    return pd.DataFrame(columns=["Ingredient", "Quantity_KG", "Rate_Per_KG"])
+recipe_name = st.text_input("Recipe Name", value="Kaju Katli")
 
-  # Total / summary rows hataayein agar sheet ke end mein hon
-  recipe_df = recipe_df[
-      ~recipe_df[ing_col_name]
-      .astype(str)
-      .str.strip()
-      .str.lower()
-      .isin(["", "nan", "total", "subtotal", "grand total"])
-  ]
+edited = st.data_editor(
+    st.session_state.df,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="editor_main",
+)
+st.session_state.df = edited
 
-  def convert_to_kg(row):
-    raw_qty = row[qty_col_name] if (qty_col_name and qty_col_name in row) else 0.0
-    try:
-      qty = float(raw_qty) if pd.notnull(raw_qty) else 0.0
-    except (ValueError, TypeError):
-      qty = 0.0
-    unit = (
-        str(row[unit_col_name]).strip().lower()
-        if (unit_col_name and unit_col_name in row and pd.notnull(row[unit_col_name]))
-        else "kg"
-    )
-    if unit in ["g", "gm", "gram", "grams", "ml"]:
-      return qty / 1000.0
-    return qty
+c1, c2, c3 = st.columns(3)
+loss_pct = c1.number_input("Loss (%)", 0.0, 90.0, 10.0)
+labor = c2.number_input("Labor + Fuel (₹)", 0.0, 100000.0, 400.0)
+packing = c3.number_input("Packaging (₹)", 0.0, 100000.0, 250.0)
 
-  recipe_df["Quantity_KG"] = recipe_df.apply(convert_to_kg, axis=1)
-  recipe_df["Ingredient"] = recipe_df[ing_col_name].astype(str).str.strip()
-  recipe_df["Rate_Per_KG"] = [
-      match_rate_from_lookup(name, price_lookup)
-      for name in recipe_df["Ingredient"]
-  ]
-  return recipe_df[["Ingredient", "Quantity_KG", "Rate_Per_KG"]].reset_index(
-      drop=True
-  )
+valid = edited.dropna(subset=["Qty_KG", "Rate_KG"]).copy()
+valid["Amount"] = valid["Qty_KG"] * valid["Rate_KG"]
+
+raw_kg = valid["Qty_KG"].sum()
+raw_cost = valid["Amount"].sum()
+net_kg = raw_kg * (1 - loss_pct / 100.0)
+total_cost = raw_cost + labor + packing
+cost_per_kg = (total_cost / net_kg) if net_kg > 0 else 0.0
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Raw Cost", f"₹{raw_cost:,.2f}")
+m2.metric("Total Batch Cost", f"₹{total_cost:,.2f}")
+m3.metric("Net Yield", f"{net_kg:,.2f} KG")
+m4.metric("Cost / KG", f"₹{cost_per_kg:,.2f}")
+
+# Excel export
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "Costing"
+ws.append(["Recipe", recipe_name, "Date", str(datetime.date.today())])
+ws.append(["Ingredient", "Qty_KG", "Rate_KG", "Amount"])
+for _, r in valid.iterrows():
+  ws.append([
+      str(r["Ingredient"]),
+      float(r["Qty_KG"]),
+      float(r["Rate_KG"]),
+      float(r["Amount"]),
+  ])
+ws.append(["Total Batch Cost", total_cost])
+ws.append(["Net Yield (KG)", net_kg])
+ws.append(["Cost Per KG", cost_per_kg])
+
+buf = io.BytesIO()
+wb.save(buf)
+
+st.download_button(
+    "📥 Download Excel (.xlsx)",
+    data=buf.getvalue(),
+    file_name=f"{recipe_name.replace(' ', '_')}_Costing.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
