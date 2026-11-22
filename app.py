@@ -219,7 +219,6 @@ def parse_recipe_excel(file_obj, sheet_name, price_lookup):
     file_obj.seek(0)
     raw_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=None)
     hdr_idx = None
-    cat_col = ing_col = qty_col = unit_col = None
     yield_pcs = 100
 
     for r_idx, row in raw_df.iterrows():
@@ -232,22 +231,29 @@ def parse_recipe_excel(file_obj, sheet_name, price_lookup):
         lmap = {str(v).strip().lower(): str(v).strip() for v in row.tolist() if pd.notnull(v)}
         if any("ingredient" in k or "item" in k for k in lmap):
             hdr_idx = r_idx
-            for k, orig in lmap.items():
-                if "cat" in k or "section" in k:
-                    cat_col = orig
-                if "ingredient" in k or ("item" in k and not ing_col):
-                    ing_col = orig
-                if "qty" in k or "quantity" in k or "base" in k:
-                    qty_col = orig
-                if "unit" in k or "uom" in k:
-                    unit_col = orig
+            break
 
     file_obj.seek(0)
-    if hdr_idx is not None and ing_col:
+    if hdr_idx is not None:
         df = pd.read_excel(file_obj, sheet_name=sheet_name, header=hdr_idx)
     else:
         df = pd.read_excel(file_obj, sheet_name=sheet_name, header=0)
+
+    if df is None or df.empty or len(df.columns) == 0:
+        return pd.DataFrame(columns=["Category", "Ingredient", "Item_Code", "Quantity_KG", "Rate_Per_KG"]), yield_pcs
+
+    cols_list = [str(c) for c in df.columns]
+    cols_lower = {str(c).strip().lower(): c for c in df.columns}
+
+    cat_col = next((c for kl, c in cols_lower.items() if "cat" in kl or "section" in kl), None)
+    ing_col = next((c for kl, c in cols_lower.items() if "ingredient" in kl), None)
+    if ing_col is None:
+        ing_col = next((c for kl, c in cols_lower.items() if "item" in kl or "material" in kl or "description" in kl), None)
+    if ing_col is None:
         ing_col = df.columns[0]
+
+    qty_col = next((c for kl, c in cols_lower.items() if "qty" in kl or "quantity" in kl or "base" in kl or "wt" in kl or "weight" in kl), None)
+    unit_col = next((c for kl, c in cols_lower.items() if "unit" in kl or "uom" in kl), None)
 
     df = df.dropna(subset=[ing_col]).copy()
     stops = {
@@ -258,12 +264,12 @@ def parse_recipe_excel(file_obj, sheet_name, price_lookup):
     df = df[~df[ing_col].astype(str).str.strip().str.lower().isin(stops)]
 
     def to_kg(r):
-        raw_q = r[qty_col] if (qty_col and qty_col in r) else 0.0
+        raw_q = r[qty_col] if (qty_col and qty_col in r.index) else 0.0
         try:
             q = float(raw_q) if pd.notnull(raw_q) else 0.0
         except (ValueError, TypeError):
             q = 0.0
-        u = str(r[unit_col]).strip().lower() if (unit_col and unit_col in r and pd.notnull(r[unit_col])) else "kg"
+        u = str(r[unit_col]).strip().lower() if (unit_col and unit_col in r.index and pd.notnull(r[unit_col])) else "kg"
         if u in ["g", "gm", "gram", "grams", "ml"]:
             return q / 1000.0
         if u in ["pc", "pcs", "piece", "pieces"]:
@@ -273,10 +279,12 @@ def parse_recipe_excel(file_obj, sheet_name, price_lookup):
     rows = []
     for _, r in df.iterrows():
         ing_nm = str(r[ing_col]).strip()
+        if not ing_nm or ing_nm.lower() == "nan":
+            continue
         q_kg = to_kg(r)
         if q_kg <= 0:
             continue
-        cat_nm = str(r[cat_col]).strip().upper() if (cat_col and cat_col in r and pd.notnull(r[cat_col])) else "MIX"
+        cat_nm = str(r[cat_col]).strip().upper() if (cat_col and cat_col in r.index and pd.notnull(r[cat_col])) else "MIX"
         code, rate = match_rate_and_code(ing_nm, price_lookup)
         rows.append({
             "Category": cat_nm,
