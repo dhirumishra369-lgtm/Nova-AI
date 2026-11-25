@@ -1,4 +1,6 @@
 import datetime
+import difflib
+import functools
 import io
 import json
 import math
@@ -76,6 +78,19 @@ def to_float(value, default=0.0):
         return default
 
 
+# Rows like "Baking temp", "Total pcs", "Total weight" are notes, not ingredients
+NON_ING_PAT = re.compile(
+    r"^\s*(total|sub\s*total|grand\s*total|sum\b|baking|bake\b|oven|temp(erature)?\b|time\b|yield"
+    r"|weight\s*per|wt\.?\s*per|per\s*(pc|pcs|piece)|no\.?\s*of\s*(pcs|pieces)|pcs\b|pieces\b|nos\b"
+    r"|remarks?\b|notes?\b|method\b|procedure\b|shelf\s*life|s\.?\s*no\b)", re.I)
+YIELD_PAT = re.compile(r"(total\s*(pcs|pieces|yield|nos)|yield|no\.?\s*of\s*(pcs|pieces)|pcs\s*per\s*batch)", re.I)
+
+
+def is_non_ingredient(name):
+    s = str(name).strip()
+    return bool(s) and bool(NON_ING_PAT.match(s))
+
+
 def normalize_recipe_df(df):
     """Same columns, clean types. Empty rows are kept so a newly added editor row doesn't vanish."""
     df = pd.DataFrame() if df is None else df.copy()
@@ -94,7 +109,8 @@ def normalize_recipe_df(df):
 def usable_rows(df):
     """Rows that count for costing: has a name and a weight above zero."""
     df = normalize_recipe_df(df)
-    return df[(df["Ingredient"] != "") & (df["Quantity_KG"].fillna(0) > 0)].reset_index(drop=True)
+    keep = (df["Ingredient"] != "") & (df["Quantity_KG"].fillna(0) > 0) & ~df["Ingredient"].map(is_non_ingredient)
+    return df[keep].reset_index(drop=True)
 
 
 def apply_editor_changes(df, changes):
@@ -120,7 +136,9 @@ def apply_editor_changes(df, changes):
 
 def new_entry(df, yield_pcs, sell_price=None):
     sp = to_float(sell_price, None) if sell_price is not None else None
-    return {"df": normalize_recipe_df(df), "yield_pcs": max(int(to_float(yield_pcs, 100) or 100), 1),
+    df = normalize_recipe_df(df)
+    df = df[~df["Ingredient"].map(is_non_ingredient)].reset_index(drop=True)
+    return {"df": df, "yield_pcs": max(int(to_float(yield_pcs, 100) or 100), 1),
             "uid": uuid.uuid4().hex[:8], "sell_price": sp if sp and sp > 0 else None}
 
 
@@ -141,6 +159,7 @@ def state_to_json(book, price_df):
         "saved_on": datetime.datetime.now().strftime("%d-%m-%Y %H:%M"),
         "recipes": [{"name": n, "yield_pcs": e.get("yield_pcs", 100), "sell_price": e.get("sell_price"),
                      "rows": _records(normalize_recipe_df(e["df"]))} for n, e in book.items()],
+        "custom_alias": st.session_state.get("custom_alias", {}),
         "price_list": {"columns": [str(c) for c in price_df.columns],
                        "data": [[None if pd.isna(v) else (v if isinstance(v, (int, float, str, bool)) else str(v))
                                  for v in row] for row in price_df.itertuples(index=False)]},
@@ -156,14 +175,15 @@ def json_to_state(text):
             book[name] = new_entry(pd.DataFrame(r.get("rows", [])), r.get("yield_pcs", 100), r.get("sell_price"))
     pl = data.get("price_list") or {}
     price_df = pd.DataFrame(pl.get("data", []), columns=pl.get("columns") or EMPTY_PRICE_DF.columns)
-    return book, price_df
+    alias = {str(k).lower(): str(v).lower() for k, v in (data.get("custom_alias") or {}).items()}
+    return book, price_df, alias
 
 
 def load_store_file():
     try:
         with open(STORE_FILE, "r", encoding="utf-8") as f:
-            book, price_df = json_to_state(f.read())
-        return (book, price_df) if book else None
+            book, price_df, alias = json_to_state(f.read())
+        return (book, price_df, alias) if book else None
     except (OSError, ValueError, TypeError, KeyError):
         return None
 
@@ -183,7 +203,7 @@ def autosave(book, price_df):
 # ----------------- SESSION STATE -----------------
 _loaded = None if "recipe_book" in st.session_state else load_store_file()
 if _loaded:
-    st.session_state.recipe_book, st.session_state.price_list_df = _loaded
+    st.session_state.recipe_book, st.session_state.price_list_df, st.session_state.custom_alias = _loaded
     st.session_state.flash_msg = ("success", f"💾 Pichla saved data load ho gaya: {len(_loaded[0])} recipe(s).")
 if "recipe_book" not in st.session_state:
     st.session_state.recipe_book = {
@@ -204,6 +224,8 @@ defaults = {
     "price_file_sig": None,
     "ed_ver": 0,
     "pl_ver": 0,
+    "map_ver": 0,
+    "custom_alias": {},
 }
 if "flash_msg" not in st.session_state:
     st.session_state.flash_msg = None
@@ -312,21 +334,76 @@ def build_price_lookup(df_price):
     return lookup
 
 
+
+SYNONYMS = {"kaju": "cashew", "cashews": "cashew", "pista": "pistachio", "pistachios": "pistachio",
+            "badam": "almond", "almonds": "almond", "suger": "sugar", "cytric": "citric", "cytrick": "citric",
+            "cinemon": "cinnamon", "condence": "condensed", "condense": "condensed", "til": "sesame",
+            "elaichi": "cardamom", "akhrot": "walnut", "walnuts": "walnut", "choco": "chocolate",
+            "filow": "fillo", "filo": "fillo", "phyllo": "fillo", "shakkar": "sugar", "makhan": "butter"}
+STOP_TOKENS = {"pcs", "pc", "kg", "kgs", "gm", "gms", "g", "ml", "ltr", "the", "and", "of", "for", "big", "small",
+               "pack", "packet", "new", "nos", "no", "brand", "best", "quality", "premium"}
+GENERIC_TOKENS = {"acid", "powder", "oil", "paste", "filling", "essence", "flavour", "flavor", "syrup", "sheet",
+                  "color", "colour", "seeds", "seed", "sauce", "mix", "compound"}
+DISTINCT_TOKENS = {"white", "dark", "milk", "green", "black", "red", "brown", "yellow", "salted", "unsalted",
+                   "roasted", "raw", "sweet", "bitter"}
+
+
+@functools.lru_cache(maxsize=20000)
+def _tokens(text):
+    out = []
+    for w in re.findall(r"[a-z]+", str(text).lower()):
+        w = SYNONYMS.get(w, w)
+        if len(w) >= 2 and w not in STOP_TOKENS:
+            out.append(w)
+    return frozenset(out)
+
+
+def _squash(text):
+    return re.sub(r"[^a-z0-9]+", "", str(text).lower())
+
+
+def _token_match(name, price_lookup):
+    want = _tokens(name)
+    if not want:
+        return None
+    want_d = want & DISTINCT_TOKENS
+    core = want - DISTINCT_TOKENS - GENERIC_TOKENS  # the word that says what the thing is ("chocolate", "pistachio")
+    best, best_score = None, 0.0
+    for desc, val in price_lookup.items():
+        have = _tokens(desc)
+        common = want & have
+        if not common or common <= GENERIC_TOKENS or (core and not (common & core)):
+            continue
+        have_d = have & DISTINCT_TOKENS
+        if want_d and have_d and want_d.isdisjoint(have_d):
+            continue  # e.g. white chocolate must not take the dark chocolate rate
+        score = len(common) / len(want) + 0.1 * difflib.SequenceMatcher(None, name, desc).ratio()
+        if score > best_score:
+            best, best_score = val, score
+    return best if best_score >= 0.5 else None
+
+
 def match_rate_and_code(ing_name, price_lookup):
-    clean = str(ing_name).strip().lower()
-    if not price_lookup or not clean or clean == "nan":
+    clean = re.sub(r"\s+", " ", str(ing_name).strip().lower())
+    if not price_lookup or not clean or clean == "nan" or is_non_ingredient(clean):
         return "MANUAL", 0.0
+    custom = st.session_state.get("custom_alias", {})
+    if custom.get(clean) in price_lookup:
+        return price_lookup[custom[clean]]
     mapped = ALIAS_MAP.get(clean, clean)
-    if mapped in price_lookup:
-        return price_lookup[mapped]
-    if clean in price_lookup:
-        return price_lookup[clean]
-    # Partial matching, ignoring very short names that would match almost anything
+    for key in (mapped, clean):
+        if key in price_lookup:
+            return price_lookup[key]
+    squashed = {_squash(k): v for k, v in price_lookup.items()}
+    for key in (mapped, clean):
+        if _squash(key) in squashed:
+            return squashed[_squash(key)]
     for target in (mapped, clean):
         for k, v in price_lookup.items():
-            if len(k) >= 3 and (target in k or k in target):
+            if len(k) >= 4 and (target in k or k in target):
                 return v
-    return "MANUAL", 0.0
+    found = _token_match(mapped, price_lookup) or _token_match(clean, price_lookup)
+    return found if found else ("MANUAL", 0.0)
 
 
 def apply_price_list(df, lookup):
@@ -367,74 +444,140 @@ def parse_price_list_file(file_obj):
     return pd.read_excel(file_obj, header=hdr_row).dropna(how="all")
 
 
+
+def _cell_text(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
+def _is_header_row(cells):
+    low = [c.lower() for c in cells if c]
+    has_ing = any("ingredient" in c or c in ("item", "items", "item name", "material", "raw material",
+                                                 "description", "particulars") for c in low)
+    has_qty = any(any(t in c for t in ("qty", "quantity", "weight", "wt", "gm", "gram", "kg")) for c in low)
+    return has_ing and has_qty
+
+
+def _unit_factor(unit):
+    u = re.sub(r"[^a-z]", "", str(unit).lower())
+    if u in ("g", "gm", "gms", "gr", "gram", "grams", "ml"):
+        return 0.001
+    if u in ("pc", "pcs", "piece", "pieces", "nos", "no"):
+        return 0.015  # rough weight of one piece; check these rows by hand
+    return 1.0
+
+
+def _first_number(cells, skip=0):
+    for c in cells[skip:]:
+        v = to_float(c, None)
+        if v is not None and v > 0:
+            return v
+    return None
+
+
 def parse_recipe_excel(file_obj, sheet_name, price_lookup):
+    """Return a list of (title, ingredients_df, yield_pcs). One sheet may hold several recipes one below another."""
     file_obj.seek(0)
-    raw_df = pd.read_excel(file_obj, sheet_name=sheet_name, header=None)
-    hdr_idx = None
-    yield_pcs = 100
+    raw = pd.read_excel(file_obj, sheet_name=sheet_name, header=None)
+    rows = [[_cell_text(v) for v in r] for r in raw.itertuples(index=False)]
+    if not rows:
+        return []
 
-    # Look for "Total Yield" anywhere in the sheet (it is often below the ingredient table)
-    for _, row in raw_df.iterrows():
-        row_strs = [str(v).strip() for v in row.tolist() if pd.notnull(v)]
-        if row_strs and "total yield" in row_strs[0].lower() and len(row_strs) > 1:
-            y = to_float(row_strs[1], None)
-            if y and y > 0:
-                yield_pcs = int(y)
-                break
+    headers = [i for i, r in enumerate(rows) if _is_header_row(r)]
+    if not headers:
+        headers = [i for i, r in enumerate(rows) if any("ingredient" in c.lower() or "item" in c.lower() for c in r)][:1]
+    if not headers:
+        return []
 
-    for r_idx, row in raw_df.iterrows():
-        lmap = {str(v).strip().lower() for v in row.tolist() if pd.notnull(v)}
-        if any("ingredient" in k or "item" in k for k in lmap):
-            hdr_idx = r_idx
-            break
+    sheet_title = re.sub(r"^\s*recipe\s*[-:–]?\s*", "", sheet_name, flags=re.I).strip().upper() or sheet_name.upper()
 
-    file_obj.seek(0)
-    df = pd.read_excel(file_obj, sheet_name=sheet_name, header=hdr_idx if hdr_idx is not None else 0)
+    def title_above(h, floor):
+        for i in range(h - 1, max(floor, h - 7) - 1, -1):
+            texts = [c for c in rows[i] if c]
+            if not texts:
+                continue
+            first = texts[0]
+            if len(texts) <= 2 and to_float(first, None) is None and not is_non_ingredient(first) \
+                    and not YIELD_PAT.search(first) and len(first) >= 3:
+                return i, re.sub(r"^\s*recipe\s*(name)?\s*[-:–]?\s*", "", first, flags=re.I).strip().upper()
+        return None, None
 
-    if df is None or df.empty or len(df.columns) == 0:
-        return pd.DataFrame(columns=RECIPE_COLS), yield_pcs
+    titles = []
+    for k, h in enumerate(headers):
+        floor = headers[k - 1] + 1 if k else 0
+        titles.append(title_above(h, floor))
 
-    cols_lower = {str(c).strip().lower(): c for c in df.columns}
-    cat_col = next((c for kl, c in cols_lower.items() if "cat" in kl or "section" in kl), None)
-    ing_col = next((c for kl, c in cols_lower.items() if "ingredient" in kl), None)
-    if ing_col is None:
-        ing_col = next((c for kl, c in cols_lower.items() if "item" in kl or "material" in kl or "description" in kl), None)
-    if ing_col is None:
-        ing_col = df.columns[0]
+    results = []
+    for k, h in enumerate(headers):
+        hdr = [c.lower() for c in rows[h]]
 
-    qty_col = next((c for kl, c in cols_lower.items() if "qty" in kl or "quantity" in kl or "base" in kl or "wt" in kl or "weight" in kl), None)
-    unit_col = next((c for kl, c in cols_lower.items() if "unit" in kl or "uom" in kl), None)
+        def find(pred):
+            return next((j for j, c in enumerate(hdr) if c and pred(c)), None)
 
-    df = df.dropna(subset=[ing_col]).copy()
-    stops = {
-        "", "nan", "total", "subtotal", "grand total", "sum of weight ingredients (gm)",
-        "baking & yield specifications", "baking temperature", "baking time",
-        "total yield (pieces)", "total weight", "weight per piece"
-    }
-    df = df[~df[ing_col].astype(str).str.strip().str.lower().isin(stops)]
+        ing_c = find(lambda c: "ingredient" in c)
+        if ing_c is None:
+            ing_c = find(lambda c: any(t in c for t in ("item", "material", "description", "particular")) and "code" not in c)
+        if ing_c is None:
+            ing_c = 0
+        qty_c = find(lambda c: any(t in c for t in ("qty", "quantity", "weight", "wt")) and "per" not in c)
+        if qty_c is None:
+            qty_c = find(lambda c: "base" in c or "gm" in c or "kg" in c)
+        unit_c = find(lambda c: c in ("unit", "units", "uom") or "uom" in c or c.startswith("unit"))
+        cat_c = find(lambda c: "cat" in c or "section" in c)
+        hdr_unit = rows[h][qty_c] if qty_c is not None else ""
+        hdr_factor = 0.001 if re.search(r"\b(gm|gms|g|gram|grams|ml)\b|\(g\)", hdr_unit.lower()) else 1.0
 
-    def to_kg(r):
-        q = to_float(r[qty_col]) if (qty_col is not None and qty_col in r.index) else 0.0
-        u = str(r[unit_col]).strip().lower() if (unit_col is not None and unit_col in r.index and pd.notnull(r[unit_col])) else "kg"
-        if u in ["g", "gm", "gms", "gram", "grams", "ml"]:
-            return q / 1000.0
-        if u in ["pc", "pcs", "piece", "pieces"]:
-            return q * 0.015
-        return q
+        stop = len(rows)
+        if k + 1 < len(headers):
+            next_title_row = titles[k + 1][0]
+            stop = next_title_row if next_title_row is not None else headers[k + 1]
 
-    rows = []
-    for _, r in df.iterrows():
-        ing_nm = str(r[ing_col]).strip()
-        if not ing_nm or ing_nm.lower() == "nan":
+        yield_pcs, cur_cat, items = None, "MIX", []
+        for i in range(h + 1, stop):
+            r = rows[i]
+            texts = [c for c in r if c]
+            if not texts:
+                continue
+            if YIELD_PAT.search(texts[0]):
+                y = _first_number(r, r.index(texts[0]) + 1) or to_float((re.findall(r"\d+", texts[0]) or [None])[-1], None)
+                if y and yield_pcs is None:
+                    yield_pcs = int(y)
+                continue
+            name = r[ing_c] if ing_c < len(r) else ""
+            if not name or is_non_ingredient(name) or to_float(name, None) is not None:
+                continue
+            qty = to_float(r[qty_c], 0.0) if (qty_c is not None and qty_c < len(r)) else 0.0
+            if qty <= 0:
+                if len(texts) == 1:  # a lone label such as "BASE SHEET" or "SUGAR SYRUP" starts a new section
+                    cur_cat = name.upper()
+                continue
+            if unit_c is not None and unit_c < len(r) and r[unit_c]:
+                factor = _unit_factor(r[unit_c])
+            else:
+                factor = hdr_factor
+            cat = r[cat_c].upper() if (cat_c is not None and cat_c < len(r) and r[cat_c]) else cur_cat
+            code, rate = match_rate_and_code(name, price_lookup)
+            items.append({"Category": cat, "Ingredient": name, "Item_Code": code,
+                          "Quantity_KG": round(qty * factor, 5), "Rate_Per_KG": rate})
+
+        if yield_pcs is None:  # some sheets put the yield above the table
+            t_row = titles[k][0] if titles[k][0] is not None else max(h - 6, 0)
+            for i in range(t_row, h):
+                texts = [c for c in rows[i] if c]
+                if texts and YIELD_PAT.search(texts[0]):
+                    y = _first_number(rows[i], rows[i].index(texts[0]) + 1)
+                    if y:
+                        yield_pcs = int(y)
+                        break
+
+        if not items:
             continue
-        q_kg = to_kg(r)
-        if q_kg <= 0:
-            continue
-        cat_nm = str(r[cat_col]).strip().upper() if (cat_col is not None and pd.notnull(r[cat_col])) else "MIX"
-        code, rate = match_rate_and_code(ing_nm, price_lookup)
-        rows.append({"Category": cat_nm, "Ingredient": ing_nm, "Item_Code": code,
-                     "Quantity_KG": round(q_kg, 5), "Rate_Per_KG": rate})
-    return pd.DataFrame(rows, columns=RECIPE_COLS), yield_pcs
+        title = titles[k][1] or (sheet_title if len(headers) == 1 else f"{sheet_title} - {k + 1}")
+        results.append((title, pd.DataFrame(items, columns=RECIPE_COLS), yield_pcs or 100))
+    return results
 
 
 def get_secret_api_key():
@@ -959,7 +1102,7 @@ def on_restore():
         st.session_state.flash_msg = ("warning", "Pehle backup (.json) file chunein.")
         return
     try:
-        book, price_df = json_to_state(up.getvalue().decode("utf-8"))
+        book, price_df, alias = json_to_state(up.getvalue().decode("utf-8"))
     except Exception as e:
         st.session_state.flash_msg = ("warning", f"Backup file padhi nahi ja saki: {e}")
         return
@@ -967,12 +1110,49 @@ def on_restore():
         st.session_state.flash_msg = ("warning", "Backup file mein koi recipe nahi mili.")
         return
     st.session_state.recipe_book = book
+    st.session_state.custom_alias = alias
     st.session_state.price_list_df = price_df
     st.session_state.price_lookup_dict = build_price_lookup(price_df)
     st.session_state.ed_ver += 1
     st.session_state.pl_ver += 1
     st.session_state.dd_recipe_selector = next(iter(book))
     st.session_state.flash_msg = ("success", f"♻️ Backup restore ho gaya: {len(book)} recipe(s).")
+
+
+def on_save_mapping(editor_key):
+    base = st.session_state.get("map_base")
+    if base is None:
+        return
+    df = apply_editor_changes(base, st.session_state.get(editor_key))
+    alias = dict(st.session_state.get("custom_alias", {}))
+    manual, n_map = {}, 0
+    for _, r in df.iterrows():
+        ing = re.sub(r"\s+", " ", str(r["Ingredient"]).strip().lower())
+        item = r.get("Rate List Item")
+        if isinstance(item, str) and item.strip():
+            alias[ing] = item.strip().lower()
+            n_map += 1
+        rate = to_float(r.get("Manual Rate / KG (₹)"))
+        if rate > 0:
+            manual[ing] = rate
+    st.session_state.custom_alias = alias
+    lookup = st.session_state.price_lookup_dict
+    for e in st.session_state.recipe_book.values():
+        d = apply_price_list(e["df"], lookup)
+        if manual:
+            keys = d["Ingredient"].str.strip().str.lower().str.replace(r"\s+", " ", regex=True)
+            mask = keys.isin(manual) & (d["Rate_Per_KG"] <= 0)
+            d.loc[mask, "Rate_Per_KG"] = keys[mask].map(manual)
+        e["df"] = d
+    st.session_state.ed_ver += 1
+    st.session_state.map_ver += 1
+    st.session_state.flash_msg = ("success", f"🔗 {n_map} mapping aur {len(manual)} manual rate saari recipes mein lag gaye.")
+
+
+def on_clear_mapping():
+    st.session_state.custom_alias = {}
+    st.session_state.map_ver += 1
+    st.session_state.flash_msg = ("success", "Saari custom mapping hata di gayi.")
 
 
 # ----------------- RECIPE SUMMARY HELPERS -----------------
@@ -1029,7 +1209,10 @@ def render_kpis(s, mrp_mult, oh_pct):
             unsafe_allow_html=True,
         )
     if s["missing"]:
-        st.warning("⚠️ In ingredients ka rate 0 hai (rate list mein match nahi mila): " + ", ".join(s["missing"]))
+        uniq = list(dict.fromkeys(s["missing"]))
+        more = f" aur {len(uniq) - 12} aur" if len(uniq) > 12 else ""
+        st.warning("⚠️ In ingredients ka rate 0 hai: " + ", ".join(uniq[:12]) + more
+                   + ". 💰 'Rate List' tab mein inhe rate list ke item se jodein ya manual rate daalein.")
 
 
 ING_VIEW_CONFIG = {
@@ -1123,7 +1306,7 @@ with u2:
                                     accept_multiple_files=True, key="main_recipe_uploader")
     active_rec_files = main_rec_xls if main_rec_xls else sb_recipes
     if active_rec_files and st.button("⚡ Excel Recipes Load Karein", width="stretch"):
-        cnt = 0
+        cnt, replaced, loaded_now = 0, 0, set()
         for rf in active_rec_files:
             try:
                 rf.seek(0)
@@ -1131,15 +1314,17 @@ with u2:
                 for s in xl.sheet_names:
                     if "price" in s.lower() or "rate" in s.lower():
                         continue
-                    df_p, y_p = parse_recipe_excel(rf, s, st.session_state.price_lookup_dict)
-                    if not df_p.empty:
-                        title_clean = s.replace("Recipe - ", "").strip().upper()
-                        st.session_state.recipe_book[title_clean] = new_entry(df_p, y_p)
+                    for title_p, df_p, y_p in parse_recipe_excel(rf, s, st.session_state.price_lookup_dict):
+                        if title_p in st.session_state.recipe_book and title_p not in loaded_now:
+                            replaced += 1
+                        st.session_state.recipe_book[title_p] = new_entry(df_p, y_p)
+                        loaded_now.add(title_p)
                         cnt += 1
             except Exception as e_rx:
                 st.error(f"'{rf.name}' read nahi ho payi: {e_rx}")
         st.session_state.ed_ver += 1
-        st.success(f"🎉 {cnt} Recipe(s) Dropdown Mein Add Ho Gayi!")
+        st.success(f"🎉 {len(loaded_now)} Recipe(s) Dropdown Mein Add Ho Gayi!"
+                   + (f" ({replaced} purani recipes naye data se update hui.)" if replaced else ""))
 
 with u3:
     st.markdown(
@@ -1511,6 +1696,50 @@ with tab_plan:
 
 # ----------------- TAB 4: RATE LIST -----------------
 with tab_rates:
+    st.markdown("#### 🔗 Jin Ingredients Ka Rate Nahi Mila")
+    unmatched = {}
+    for n, e in book.items():
+        for ing in usable_rows(e["df"]).query("Rate_Per_KG <= 0")["Ingredient"]:
+            key = re.sub(r"\s+", " ", ing.strip().lower())
+            unmatched.setdefault(key, {"name": ing.strip(), "recipes": set()})["recipes"].add(n)
+    if not unmatched:
+        st.success("✅ Saari recipes ke har ingredient ka rate mil gaya hai.")
+    else:
+        st.caption(f"{len(unmatched)} ingredient(s) ka rate 0 hai. Har ek ke aage rate list ka sahi item chunein "
+                   "(ye yaad rakha jayega), ya agar rate list mein hai hi nahi to manual rate daalein. "
+                   "Phir neeche wala button dabayein.")
+        if not st.session_state.price_lookup_dict:
+            st.info("Abhi rate list upload nahi hui hai, isliye sirf manual rate daal sakte hain.")
+        map_base = pd.DataFrame([{
+            "Ingredient": v["name"],
+            "Recipes": f"{len(v['recipes'])}: " + ", ".join(sorted(v["recipes"])[:3]) + (" …" if len(v["recipes"]) > 3 else ""),
+            "Rate List Item": None,
+            "Manual Rate / KG (₹)": None,
+        } for v in sorted(unmatched.values(), key=lambda v: -len(v["recipes"]))])
+        map_base["Manual Rate / KG (₹)"] = map_base["Manual Rate / KG (₹)"].astype(float)
+        map_base["Rate List Item"] = map_base["Rate List Item"].astype(object)
+        st.session_state.map_base = map_base
+        map_key = f"map_editor_{st.session_state.map_ver}"
+        st.data_editor(
+            map_base, hide_index=True, width="stretch", key=map_key,
+            disabled=["Ingredient", "Recipes"],
+            column_config={
+                "Rate List Item": st.column_config.SelectboxColumn(
+                    "Rate List Item (chunein)", options=sorted({k.upper() for k in st.session_state.price_lookup_dict}),
+                    width="large"),
+                "Manual Rate / KG (₹)": st.column_config.NumberColumn(min_value=0.0, format="₹%.2f"),
+            },
+        )
+        st.button("✅ Mapping Save Karke Rates Lagayein", type="primary", on_click=on_save_mapping, args=(map_key,))
+
+    if st.session_state.custom_alias:
+        with st.expander(f"📝 Aapki saved mappings ({len(st.session_state.custom_alias)})"):
+            st.dataframe(pd.DataFrame([{"Recipe Ingredient": k.upper(), "Rate List Item": v.upper()}
+                                       for k, v in st.session_state.custom_alias.items()]),
+                         hide_index=True, width="stretch")
+            st.button("🗑️ Saari mapping hatayein", on_click=on_clear_mapping)
+
+    st.markdown("---")
     st.markdown("#### 💰 Uploaded Rate List Sheet (Live Editable)")
     pl_key = f"rate_list_editor_{st.session_state.pl_ver}"
     st.data_editor(
